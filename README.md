@@ -47,3 +47,5 @@ cd socialmedia_downloader
 ```bash
 pip install -r requirements.txt
 
+streamlit run app.y
+
