@@ -159,14 +159,42 @@ jobs:
       uses: actions/download-artifact@v4
       with:
         name: deployment-package-${{ github.sha }}
-        
-    - name: Setup SSH
+             
+    - name: Debug Ed25519 SSH Setup
       run: |
+        echo "🔧 Debugging Ed25519 SSH setup..."
+        
         mkdir -p ~/.ssh
+        chmod 700 ~/.ssh
+        
+        # Écrire la clé
         echo "${{ secrets.SSH_PRIVATE_KEY_1BLU }}" > ~/.ssh/staging_key
         chmod 600 ~/.ssh/staging_key
-        ssh-keyscan -H $STAGING_SERVER >> ~/.ssh/known_hosts
         
+        # Debug info
+        echo "📋 Key file info:"
+        file ~/.ssh/staging_key
+        ls -la ~/.ssh/staging_key
+        
+        echo "🔑 Testing key:"
+        ssh-keygen -l -f ~/.ssh/staging_key
+        
+        echo "🔍 Key type detection:"
+        ssh-keygen -l -f ~/.ssh/staging_key | head -1
+        
+        # Scanner l'hôte
+        ssh-keyscan -H $STAGING_SERVER >> ~/.ssh/known_hosts
+
+    - name: Test connection with verbose output
+      run: |
+        echo "🔗 Testing connection with verbose output..."
+        ssh -i ~/.ssh/staging_key \
+            -o ConnectTimeout=10 \
+            -o LogLevel=DEBUG3 \
+            -o StrictHostKeyChecking=yes \
+            -v \
+            $DEPLOY_USER@$STAGING_SERVER "echo '✅ Connection successful'"
+
     - name: Verify SSH connection
       run: |
         ssh -i ~/.ssh/staging_key $DEPLOY_USER@$STAGING_SERVER "echo '✅ SSH connection successful'"
