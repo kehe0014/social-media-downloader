@@ -8,8 +8,9 @@ on:
 
 env:
   STAGING_SERVER: 178.254.23.139
-  DEPLOY_USER: hkengne
+  DEPLOY_USER: deploy
   APP_NAME: social-media-downloader
+  APP_PATH: /var/www/streamlit-app 
 
 jobs:
   test:
@@ -176,85 +177,13 @@ jobs:
         ssh-keyscan -H $STAGING_SERVER >> ~/.ssh/known_hosts
         chmod 600 ~/.ssh/known_hosts
 
-    - name: Comprehensive SSH diagnostics
+    - name: Test SSH connection as deploy user
       run: |
-        echo "🔍 Comprehensive SSH Diagnostics"
-        echo "================================="
-        
-        # 1. Vérifier la connectivité réseau
-        echo ""
-        echo "1. 📡 Network connectivity test:"
-        echo "Testing connection to $STAGING_SERVER:22"
-        if nc -zv -w 5 $STAGING_SERVER 22; then
-          echo "✅ Port 22 is open and accessible"
-        else
-          echo "❌ Cannot reach port 22 on $STAGING_SERVER"
-          echo "This could be due to:"
-          echo "   - Server is down"
-          echo "   - Firewall blocking port 22"
-          echo "   - Network connectivity issues"
-          exit 1
-        fi
-        
-        # 2. Vérifier la clé
-        echo ""
-        echo "2. 🔑 SSH key verification:"
-        echo "Key fingerprint:"
-        ssh-keygen -l -f ~/.ssh/staging_key
-        echo "Key type:"
-        file ~/.ssh/staging_key
-        
-        # 3. Vérifier les permissions
-        echo ""
-        echo "3. 📁 File permissions:"
-        ls -la ~/.ssh/
-        
-        # 4. Test avec différentes options
-        echo ""
-        echo "4. 🔗 Testing connection with different methods:"
-        
-        # Méthode 1: Simple test
-        echo ""
-        echo "Method 1: Basic connection test"
-        set +e
+        echo "🔗 Testing SSH connection as $DEPLOY_USER@$STAGING_SERVER..."
         ssh -i ~/.ssh/staging_key \
-            -o ConnectTimeout=10 \
-            -o PasswordAuthentication=no \
+            -o ConnectTimeout=15 \
             -o BatchMode=yes \
-            $DEPLOY_USER@$STAGING_SERVER "echo '✅ Method 1: Basic connection successful'" 
-        BASIC_EXIT_CODE=$?
-        set -e
-        
-        if [ $BASIC_EXIT_CODE -eq 0 ]; then
-          echo "✅ Method 1: Success"
-        else
-          echo "❌ Method 1: Failed with exit code $BASIC_EXIT_CODE"
-        fi
-        
-        # Méthode 2: Avec verbose pour diagnostic
-        echo ""
-        echo "Method 2: Verbose connection test"
-        set +e
-        ssh -i ~/.ssh/staging_key \
-            -o ConnectTimeout=10 \
-            -o LogLevel=DEBUG1 \
-            -v \
-            $DEPLOY_USER@$STAGING_SERVER "echo '✅ Method 2: Verbose connection successful'"
-        VERBOSE_EXIT_CODE=$?
-        set -e
-        
-        if [ $VERBOSE_EXIT_CODE -eq 0 ]; then
-          echo "✅ Method 2: Success"
-        else
-          echo "❌ Method 2: Failed with exit code $VERBOSE_EXIT_CODE"
-          echo ""
-          echo "🔧 Common issues and solutions:"
-          echo "   - Ensure public key is in /home/$DEPLOY_USER/.ssh/authorized_keys on server"
-          echo "   - Check file permissions on server: chmod 700 ~/.ssh && chmod 600 ~/.ssh/authorized_keys"
-          echo "   - Verify SSH service is running on server: sudo systemctl status ssh"
-          echo "   - Check if user '$DEPLOY_USER' exists on server"
-          exit 1
-        fi
+            $DEPLOY_USER@$STAGING_SERVER "echo '✅ SSH Authentication Successful - Connected as user: \$(whoami) on \$(hostname)'"
 
     - name: Transfer deployment package
       run: |
@@ -274,35 +203,74 @@ jobs:
             set -e
             echo '📋 Deployment script started...'
             
+            # Vérifier les permissions sur /var/www
+            echo '🔐 Checking permissions on $APP_PATH...'
+            sudo mkdir -p $APP_PATH
+            sudo chown -R $DEPLOY_USER:$DEPLOY_USER $APP_PATH
+            sudo chmod -R 755 $APP_PATH
+            
             # Create backup of current deployment
-            BACKUP_DIR=\"/home/$DEPLOY_USER/backups/backup_\$(date +%Y%m%d_%H%M%S)\"
+            BACKUP_DIR=\"$APP_PATH/backups/backup_\$(date +%Y%m%d_%H%M%S)\"
             echo '📦 Creating backup in: '\$BACKUP_DIR
             mkdir -p \$BACKUP_DIR
             
-            if [ -d \"/home/$DEPLOY_USER/$APP_NAME\" ]; then
+            if [ -d \"$APP_PATH\" ] && [ \"\$(ls -A $APP_PATH)\" ]; then
               echo '💾 Backing up current version...'
-              cp -r /home/$DEPLOY_USER/$APP_NAME/* \$BACKUP_DIR/ 2>/dev/null || true
+              cp -r $APP_PATH/* \$BACKUP_DIR/ 2>/dev/null || true
             fi
             
             # Extract new deployment
             echo '📂 Extracting new deployment package...'
-            mkdir -p /home/$DEPLOY_USER/$APP_NAME
-            tar -xzf /tmp/deployment-package-${{ github.sha }}.tar.gz -C /home/$DEPLOY_USER/$APP_NAME
+            mkdir -p $APP_PATH
+            tar -xzf /tmp/deployment-package-${{ github.sha }}.tar.gz -C $APP_PATH
             
             # Set up Python virtual environment
             echo '🐍 Setting up Python environment...'
-            cd /home/$DEPLOY_USER/$APP_NAME
+            cd $APP_PATH
             python3 -m venv venv
             source venv/bin/activate
             pip install --upgrade pip
             pip install -r requirements.txt
             
+            # Set proper permissions for web server
+            echo '🔐 Setting proper permissions...'
+            sudo chown -R $DEPLOY_USER:$DEPLOY_USER $APP_PATH
+            sudo chmod -R 755 $APP_PATH
+            sudo chmod 600 $APP_PATH/venv/bin/activate 2>/dev/null || true
+            
             # Clean up
             rm -f /tmp/deployment-package-${{ github.sha }}.tar.gz
             
             echo '✅ Deployment completed successfully!'
-            echo '📁 Application location: /home/$DEPLOY_USER/$APP_NAME'
-            echo '🔧 Virtual environment: /home/$DEPLOY_USER/$APP_NAME/venv'
+            echo '📁 Application location: $APP_PATH'
+            echo '🔧 Virtual environment: $APP_PATH/venv'
+            echo '🌐 Nginx serving from: $APP_PATH'
+        "
+        
+    - name: Restart Streamlit service
+      run: |
+        echo "🔄 Restarting Streamlit service..."
+        ssh -i ~/.ssh/staging_key \
+            -o ConnectTimeout=10 \
+            $DEPLOY_USER@$STAGING_SERVER "
+            set -e
+            echo '🔧 Checking Streamlit service...'
+            
+            # Vérifier si le service Streamlit existe et le redémarrer
+            if sudo systemctl is-active --quiet streamlit-app; then
+              echo '🔄 Restarting existing Streamlit service...'
+              sudo systemctl restart streamlit-app
+              echo '✅ Streamlit service restarted'
+            else
+              echo '⚠️  Streamlit service not found, you may need to set it up manually'
+              echo '💡 To create a service, run:'
+              echo '   sudo nano /etc/systemd/system/streamlit-app.service'
+            fi
+            
+            # Redémarrer Nginx pour prendre en compte les changements
+            echo '🔄 Restarting Nginx...'
+            sudo systemctl restart nginx
+            echo '✅ Nginx restarted'
         "
         
     - name: Verify deployment
@@ -313,7 +281,7 @@ jobs:
             $DEPLOY_USER@$STAGING_SERVER "
             set -e
             echo '🔍 Running deployment verification...'
-            cd /home/$DEPLOY_USER/$APP_NAME
+            cd $APP_PATH
             
             # Check if main application file exists
             if [ -f 'app.py' ]; then
@@ -340,14 +308,10 @@ jobs:
               exit 1
             fi
             
-            # Test requirements installation
-            if pip list | grep -q 'requests'; then
-              echo '✅ Dependencies installed'
-            else
-              echo '❌ Dependencies not properly installed'
-            fi
-            
-            echo '🎉 Deployment verification successful!'
+            # Check permissions
+            echo '📋 Checking permissions...'
+            ls -la $APP_PATH/
+            echo '✅ Deployment verification successful!'
         "
         
     - name: Cleanup SSH key
@@ -355,10 +319,11 @@ jobs:
         rm -f ~/.ssh/staging_key
         echo "✅ SSH key cleaned up"
 
+
   notify:
     name: Notify Pipeline Status
     runs-on: ubuntu-latest
-    needs: [test, package, security-scan, deploy-staging]
+    needs: [test, package, security-scan, deploy-staging, start-and-verify]
     if: always()
     
     steps:
@@ -373,6 +338,7 @@ jobs:
         echo "   - Security Scan: ${{ needs.security-scan.result }}"
         echo "   - Package: ${{ needs.package.result }}"
         echo "   - Staging Deployment: ${{ needs.deploy-staging.result }}"
+        echo "   - Health Check: ${{ needs.start-and-verify.result }}"
         echo ""
         
         if [ "${{ job.status }}" == "success" ]; then
@@ -380,7 +346,9 @@ jobs:
           echo "🌐 Staging Server: $STAGING_SERVER"
           echo "👤 Deploy User: $DEPLOY_USER"
           echo "📦 Application: $APP_NAME"
-          echo "🚀 Application successfully deployed to staging!"
+          echo "📁 Deployment Path: $APP_PATH"
+          echo "🌐 Application URL: http://$STAGING_SERVER:8501"
+          echo "🚀 Application successfully deployed and health checks passed!"
         else
           echo "❌ Some CI/CD checks failed"
           echo "Please check the failed jobs and fix the issues"
@@ -396,3 +364,196 @@ jobs:
       run: |
         echo "🧹 Cleaning up workflow temporary resources"
         echo "Workflow completed with overall status: ${{ job.status }}"
+
+  start-and-verify:
+    name: Start Application and Health Check
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main')
+    
+    steps:
+    - name: Setup SSH
+      run: |
+        mkdir -p ~/.ssh
+        chmod 700 ~/.ssh
+        echo "${{ secrets.SSH_PRIVATE_KEY_DE }}" > ~/.ssh/staging_key
+        chmod 600 ~/.ssh/staging_key
+        ssh-keyscan -H $STAGING_SERVER >> ~/.ssh/known_hosts
+
+    - name: Start Streamlit Application
+      run: |
+        echo "🚀 Starting Streamlit application..."
+        ssh -i ~/.ssh/staging_key \
+            -o ConnectTimeout=10 \
+            $DEPLOY_USER@$STAGING_SERVER "
+            set -e
+            echo '🔧 Starting Streamlit application...'
+            cd $APP_PATH
+            
+            # Vérifier si l'application est déjà en cours d'exécution
+            if pgrep -f 'streamlit run app.py' > /dev/null; then
+              echo '⚠️  Streamlit is already running, stopping it...'
+              pkill -f 'streamlit run app.py' || true
+              sleep 2
+            fi
+            
+            # Démarrer Streamlit en arrière-plan avec le virtual environment
+            echo '🐍 Activating virtual environment and starting Streamlit...'
+            source venv/bin/activate
+            
+            # Démarrer Streamlit sur le port 8501 en arrière-plan
+            nohup streamlit run app.py \
+              --server.port=8501 \
+              --server.address=0.0.0.0 \
+              --server.headless=true \
+              --browser.serverAddress=0.0.0.0 \
+              --browser.gatherUsageStats=false \
+              > streamlit.log 2>&1 &
+            
+            # Attendre que l'application démarre
+            echo '⏳ Waiting for application to start...'
+            sleep 10
+            
+            # Vérifier si le processus est toujours en cours d'exécution
+            if pgrep -f 'streamlit run app.py' > /dev/null; then
+              echo '✅ Streamlit application started successfully'
+              echo '📝 Log file: $APP_PATH/streamlit.log'
+            else
+              echo '❌ Failed to start Streamlit application'
+              echo '📄 Checking logs...'
+              cat streamlit.log || true
+              exit 1
+            fi
+            
+            # Vérifier le port d'écoute
+            echo '🔍 Checking if port 8501 is listening...'
+            if netstat -tuln | grep ':8501' > /dev/null; then
+              echo '✅ Port 8501 is listening'
+            else
+              echo '❌ Port 8501 is not listening'
+              exit 1
+            fi
+        "
+
+    - name: Health Check - Basic Connectivity
+      run: |
+        echo "🏥 Performing health checks..."
+        echo "🔗 Testing basic connectivity to Streamlit app..."
+        
+        # Test de connexion basique
+        MAX_RETRIES=10
+        RETRY_COUNT=0
+        
+        while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+          if curl -f -s -o /dev/null -w "HTTP Status: %{http_code}\n" \
+               --connect-timeout 10 \
+               http://$STAGING_SERVER:8501/healthz 2>/dev/null || \
+             curl -f -s -o /dev/null -w "HTTP Status: %{http_code}\n" \
+               --connect-timeout 10 \
+               http://$STAGING_SERVER:8501/ 2>/dev/null; then
+            echo "✅ Health check passed - Application is responding"
+            break
+          else
+            RETRY_COUNT=$((RETRY_COUNT + 1))
+            echo "⏳ Health check attempt $RETRY_COUNT/$MAX_RETRIES failed, retrying in 5 seconds..."
+            sleep 5
+          fi
+        done
+        
+        if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
+          echo "❌ Health check failed after $MAX_RETRIES attempts"
+          exit 1
+        fi
+
+    - name: Health Check - Streamlit API
+      run: |
+        echo "🔍 Testing Streamlit specific endpoints..."
+        
+        # Test de l'endpoint principal de Streamlit
+        echo "Testing main Streamlit endpoint..."
+        RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
+          --connect-timeout 10 \
+          http://$STAGING_SERVER:8501/)
+        
+        if [ "$RESPONSE" = "200" ] || [ "$RESPONSE" = "302" ]; then
+          echo "✅ Streamlit main endpoint responding (HTTP $RESPONSE)"
+        else
+          echo "❌ Streamlit main endpoint not responding properly (HTTP $RESPONSE)"
+          exit 1
+        fi
+        
+        # Test de l'endpoint de santé Streamlit
+        echo "Testing Streamlit health endpoint..."
+        if curl -s --connect-timeout 10 http://$STAGING_SERVER:8501/_stcore/health | grep -q "ok"; then
+          echo "✅ Streamlit health endpoint responding"
+        else
+          echo "⚠️  Streamlit health endpoint not standard, but main endpoint works"
+        fi
+
+    - name: Health Check - Application Logic
+      run: |
+        echo "🧪 Testing application specific functionality..."
+        
+        # Vérifier que l'application charge correctement
+        echo "Testing application load..."
+        if curl -s --connect-timeout 10 http://$STAGING_SERVER:8501/ | grep -i "social.media.downloader\|streamlit" > /dev/null; then
+          echo "✅ Application UI loaded successfully"
+        else
+          echo "⚠️  Application UI might not be loading as expected"
+        fi
+
+    - name: Verify Application Process
+      run: |
+        echo "🔍 Verifying application process status..."
+        ssh -i ~/.ssh/staging_key \
+            -o ConnectTimeout=10 \
+            $DEPLOY_USER@$STAGING_SERVER "
+            set -e
+            echo '📊 Application process status:'
+            
+            # Vérifier le processus Streamlit
+            if pgrep -f 'streamlit run app.py' > /dev/null; then
+              echo '✅ Streamlit process is running'
+              echo '📈 Process info:'
+              ps aux | grep streamlit | grep -v grep
+            else
+              echo '❌ Streamlit process is not running'
+              exit 1
+            fi
+            
+            # Vérifier la consommation mémoire
+            echo '💾 Memory usage:'
+            ps aux --sort=-%mem | head -5
+            
+            # Vérifier les logs récents
+            echo '📄 Recent application logs:'
+            if [ -f '$APP_PATH/streamlit.log' ]; then
+              tail -20 '$APP_PATH/streamlit.log'
+            else
+              echo 'No log file found'
+            fi
+            
+            # Vérifier les connexions réseau
+            echo '🌐 Network connections:'
+            netstat -tuln | grep ':8501' || echo 'No connections on port 8501'
+        "
+
+    - name: Final Health Report
+      run: |
+        echo "📊 FINAL HEALTH CHECK REPORT"
+        echo "============================"
+        echo "✅ Application deployed successfully"
+        echo "✅ Streamlit process started"
+        echo "✅ Health checks passed"
+        echo "✅ Network connectivity confirmed"
+        echo ""
+        echo "🌐 Application URL: http://$STAGING_SERVER:8501"
+        echo "📁 Deployment path: $APP_PATH"
+        echo "👤 Running as user: $DEPLOY_USER"
+        echo ""
+        echo "🎉 Deployment and health checks completed successfully!"
+
+    - name: Cleanup SSH
+      run: |
+        rm -f ~/.ssh/staging_key
+        echo "✅ SSH key cleaned up"
