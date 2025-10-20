@@ -1,0 +1,19 @@
+[Unit]
+Description=Streamlit Social Media Downloader
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=deploy
+Group=deploy
+WorkingDirectory=/var/www/streamlit-app
+Environment=PATH=/var/www/streamlit-app/venv/bin
+ExecStart=/var/www/streamlit-app/venv/bin/streamlit run app.py --server.port=8501 --server.address=0.0.0.0 --server.headless=true
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
