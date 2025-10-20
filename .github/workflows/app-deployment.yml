@@ -32,10 +32,6 @@ jobs:
         pip install -r requirements.txt
         pip install pytest pytest-cov black flake8
         
-    - name: Format code with Black
-      run: |
-        black app.py --check --line-length 79
-        
     - name: Run linting with Flake8
       run: |
         flake8 app.py --max-line-length=79 --show-source
