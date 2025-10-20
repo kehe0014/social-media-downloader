@@ -164,7 +164,7 @@ jobs:
         chmod 700 ~/.ssh
         
         # Écrire la clé Ed25519
-        echo "${{ secrets.SSH_PRIVATE_KEY_1BLU }}" > ~/.ssh/staging_key
+        echo "${{ secrets.SSH_PRIVATE_KEY_DE }}" > ~/.ssh/staging_key
         chmod 600 ~/.ssh/staging_key
         
         # Valider la clé
