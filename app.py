@@ -3,6 +3,7 @@ import time
 import streamlit as st
 from downloader.yt_utils import get_video_info, download_media
 from downloader.file_utils import ensure_dir
+import tempfile
 
 OUTPUT_DIR = ensure_dir("downloads")
 
@@ -31,7 +32,7 @@ if preview_button and url:
         st.write(f"👤 Auteur : {video_info.get('uploader')}")
         st.write(f"📺 Plateforme : {video_info.get('extractor_key')}")
     except Exception as e:
-        st.error(f"❌ Impossible d’obtenir les infos : {e}")
+        st.error(f"❌ Impossible d'obtenir les infos : {e}")
 
 # --- Choix du format et qualité ---
 if video_info or (url and not preview_button):
@@ -46,22 +47,45 @@ if video_info or (url and not preview_button):
         try:
             with st.spinner("⏳ Téléchargement en cours..."):
                 start = time.time()
+                
+                # Télécharger dans un répertoire temporaire
+                temp_dir = tempfile.mkdtemp()
                 fichier = download_media(
-                    url, mode.lower().split()[0], quality, OUTPUT_DIR
+                    url, mode.lower().split()[0], quality, temp_dir
                 )
                 duree = time.time() - start
                 st.success(f"✅ Téléchargement terminé en {duree:.1f} s")
 
+                # Lire le fichier et créer le bouton de téléchargement
                 with open(fichier, "rb") as f:
+                    file_data = f.read()
+                    
+                    # Déterminer l'extension du fichier
+                    extension = ".mp4" if mode == "Vidéo (MP4)" else ".mp3"
+                    file_name = os.path.basename(fichier)
+                    
+                    # S'assurer que le nom de fichier a la bonne extension
+                    if not file_name.endswith(extension):
+                        base_name = os.path.splitext(file_name)[0]
+                        file_name = base_name + extension
+                    
                     st.download_button(
                         label="⬇️ Télécharger le fichier",
-                        data=f,
-                        file_name=os.path.basename(fichier),
+                        data=file_data,
+                        file_name=file_name,
                         mime=(
                             "video/mp4"
                             if mode == "Vidéo (MP4)"
                             else "audio/mpeg"
                         ),
                     )
+                
+                # Nettoyer le fichier temporaire
+                try:
+                    os.remove(fichier)
+                    os.rmdir(temp_dir)
+                except:
+                    pass
+                    
         except Exception as e:
             st.error(f"❌ Erreur : {e}")
