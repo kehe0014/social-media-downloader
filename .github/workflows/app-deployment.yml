@@ -65,19 +65,40 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
       
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Install and format code
+      run: |
+        pip install black
+        black app.py --line-length 79
+      
     - name: Create exclusion file
       run: |
         echo -e ".git\n.github\n.gitignore\n*.pyc\nvenv\ntests\n__pycache__\n.coverage\nhtmlcov\n.pytest_cache\ndownloads" > .tar_exclude
         
-    - name: Create deployment package with exclusions
+    - name: Create deployment package in /tmp
       run: |
-        tar -czf deployment-package-${{ github.sha }}.tar.gz \
-          -X .tar_exclude \
+        # Créer le package dans /tmp pour éviter "file changed as we read it"
+        cd /tmp
+        mkdir -p build-${{ github.sha }}
+        cp -r $GITHUB_WORKSPACE/* build-${{ github.sha }}/
+        cd build-${{ github.sha }}
+        
+        # Créer le package depuis le répertoire temporaire
+        tar -czf /tmp/deployment-package-${{ github.sha }}.tar.gz \
+          -X $GITHUB_WORKSPACE/.tar_exclude \
           .
           
+        # Déplacer le package vers le workspace
+        mv /tmp/deployment-package-${{ github.sha }}.tar.gz $GITHUB_WORKSPACE/
+        
     - name: Clean up temporary files
       run: |
         rm -f .tar_exclude
+        rm -rf /tmp/build-${{ github.sha }}
           
     - name: Upload deployment package artifact
       uses: actions/upload-artifact@v4
