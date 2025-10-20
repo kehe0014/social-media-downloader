@@ -190,3 +190,69 @@ downloads/
 temp/
 tmp/
 cache/
+
+# Ignore local application directory
+local_app/
+# Ignore environment variable files
+.env.local
+.env.development
+.env.production
+.env.test
+.env.dev
+.env.prod
+.env.testing
+.env.example
+.env.sample
+.env.template
+# Ignore Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+# Ignore coverage reports
+.coverage/
+htmlcov/
+.coverage.*
+# Ignore pytest cache
+.pytest_cache/
+# Ignore mypy cache
+.mypy_cache/
+# Ignore Celery beat schedule file
+celerybeat-schedule
+# Ignore Streamlit specific files
+.streamlit/ 
+# Ignore log files
+*.log
+logs/
+# Ignore temporary files
+*.tmp
+*.temp  
+# Ignore IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+# Ignore OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+# Ignore build directories
+build/
+dist/
+__pycache__/
+*.py[cod]
+*$py.class
+#Ignore .tar.gz files
+*.tar.gz
+# Ignore .zip files
+*.zip
+# Ignore .egg files
+*.egg
+# Ignore .whl files
+*.whl
+# Ignore compiled C extensions
+*.so
+# Ignore virtual environment directories
+.env
