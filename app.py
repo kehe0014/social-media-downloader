@@ -8,7 +8,9 @@ OUTPUT_DIR = ensure_dir("downloads")
 
 st.set_page_config(page_title="Social Media Downloader 🎬", layout="centered")
 st.title("🎬 Social Media Downloader Pro")
-st.write("Téléchargez des vidéos ou audios depuis Facebook, YouTube, TikTok, Instagram...")
+st.write(
+    "Téléchargez des vidéos ou audios depuis Facebook, YouTube, TikTok, Instagram..."
+)
 
 # --- Input utilisateur ---
 url = st.text_input("🔗 URL de la vidéo :")
@@ -21,7 +23,9 @@ if preview_button and url:
         st.success("✅ Vidéo trouvée !")
         st.image(video_info.get("thumbnail"), width=480)
         st.markdown(f"### 🎥 {video_info.get('title')}")
-        st.write(f"⏱️ Durée : {video_info.get('duration',0)//60} min {video_info.get('duration',0)%60} s")
+        st.write(
+            f"⏱️ Durée : {video_info.get('duration',0)//60} min {video_info.get('duration',0)%60} s"
+        )
         st.write(f"👤 Auteur : {video_info.get('uploader')}")
         st.write(f"📺 Plateforme : {video_info.get('extractor_key')}")
     except Exception as e:
@@ -40,7 +44,9 @@ if video_info or (url and not preview_button):
         try:
             with st.spinner("⏳ Téléchargement en cours..."):
                 start = time.time()
-                fichier = download_media(url, mode.lower().split()[0], quality, OUTPUT_DIR)
+                fichier = download_media(
+                    url, mode.lower().split()[0], quality, OUTPUT_DIR
+                )
                 duree = time.time() - start
                 st.success(f"✅ Téléchargement terminé en {duree:.1f} s")
 
@@ -49,7 +55,11 @@ if video_info or (url and not preview_button):
                         label="⬇️ Télécharger le fichier",
                         data=f,
                         file_name=os.path.basename(fichier),
-                        mime="video/mp4" if mode=="Vidéo (MP4)" else "audio/mpeg"
+                        mime=(
+                            "video/mp4"
+                            if mode == "Vidéo (MP4)"
+                            else "audio/mpeg"
+                        ),
                     )
         except Exception as e:
             st.error(f"❌ Erreur : {e}")

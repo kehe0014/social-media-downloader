@@ -3,6 +3,7 @@ from downloader.yt_utils import download_media
 
 app = FastAPI(title="Social Media Downloader API")
 
+
 @app.get("/download")
 def download(url: str, mode: str = "video", quality: str = "best"):
     try:
