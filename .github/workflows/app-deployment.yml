@@ -8,7 +8,7 @@ on:
 
 env:
   STAGING_SERVER: 178.254.23.139
-  DEPLOY_USER: deploy
+  DEPLOY_USER: hkengne
   APP_NAME: social-media-downloader
   APP_PATH: /var/www/streamlit-app 
 
