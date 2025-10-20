@@ -9,7 +9,8 @@ OUTPUT_DIR = ensure_dir("downloads")
 st.set_page_config(page_title="Social Media Downloader 🎬", layout="centered")
 st.title("🎬 Social Media Downloader Pro")
 st.write(
-    "Téléchargez des vidéos ou audios depuis Facebook, YouTube, TikTok, Instagram..."
+    "Téléchargez des vidéos ou audios depuis Facebook, YouTube,"
+    "TikTok, Instagram et bien d'autres plateformes."
 )
 
 # --- Input utilisateur ---
@@ -23,9 +24,10 @@ if preview_button and url:
         st.success("✅ Vidéo trouvée !")
         st.image(video_info.get("thumbnail"), width=480)
         st.markdown(f"### 🎥 {video_info.get('title')}")
-        st.write(
-            f"⏱️ Durée : {video_info.get('duration',0)//60} min {video_info.get('duration',0)%60} s"
-        )
+        duration = video_info.get('duration', 0)
+        minutes = duration // 60
+        seconds = duration % 60
+        st.write(f"⏱️ Durée : {minutes} min {seconds} s")
         st.write(f"👤 Auteur : {video_info.get('uploader')}")
         st.write(f"📺 Plateforme : {video_info.get('extractor_key')}")
     except Exception as e:
