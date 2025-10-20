@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 env:
-  STAGING_SERVER: 178.51.255.79
+  STAGING_SERVER: 178.254.23.139
   DEPLOY_USER: deploy
   APP_NAME: social-media-downloader
 
