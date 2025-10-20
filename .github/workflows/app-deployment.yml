@@ -323,7 +323,7 @@ jobs:
   notify:
     name: Notify Pipeline Status
     runs-on: ubuntu-latest
-    needs: [test, package, security-scan, deploy-staging, start-and-verify]
+    needs: [test, package, security-scan, deploy-staging]
     if: always()
     
     steps:
@@ -338,7 +338,6 @@ jobs:
         echo "   - Security Scan: ${{ needs.security-scan.result }}"
         echo "   - Package: ${{ needs.package.result }}"
         echo "   - Staging Deployment: ${{ needs.deploy-staging.result }}"
-        echo "   - Health Check: ${{ needs.start-and-verify.result }}"
         echo ""
         
         if [ "${{ job.status }}" == "success" ]; then
