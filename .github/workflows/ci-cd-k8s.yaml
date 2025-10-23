@@ -21,7 +21,7 @@ on:
 env:
   PYTHON_VERSION: '3.10'
   # --- Docker Hub Variables ---
-  DOCKER_USERNAME: tdk341                           # Your Docker Hub Username
+  DOCKER_USERNAME: tdksoft341                           # Your Docker Hub Username
   REGISTRY: docker.io
   IMAGE_NAME: social-media-dashboard               # Define a clean image name
   IMAGE_TAG: ${{ github.sha }}                     # Use commit SHA for unique versioning
