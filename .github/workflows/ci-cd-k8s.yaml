@@ -75,12 +75,12 @@ jobs:
           context: .
           push: true
           # Fully qualified tags: tdk341/social-media-dashboard:sha
-          tags: ${{ env.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+          # tags: ${{ env.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
           # Also tag as 'latest'
           tags: |
             ${{ env.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
             ${{ env.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:latest
-          cache-from: type=gha
+          cache-from: type=gha  
 
 
   ## Job 2: Deploy to K3S Cluster
