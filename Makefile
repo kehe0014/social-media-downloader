@@ -1,205 +1,180 @@
-# ------------------------------------------------
-# Makefile pour CI/CD local avec virtualenv
-# ------------------------------------------------
-.PHONY: help venv setup check-venv check-dependencies clone-app format lint unit-test test build freeze-requirements dry-run simulate-github-actions clean clean-all all ci local-ci full-test info test-venv
+# ==============================================================================
+# Makefile for Application Deployment
+# Description: Build, test, and deploy application to various environments
+# ==============================================================================
 
-# Configuration
-APP_NAME := social-media-downloader
-DEPLOY_USER := deploy
-STAGING_SERVER ?= 178.254.23.139
-PRODUCTION_SERVER ?= 178.254.23.140
-APP_REPO := https://github.com/kehe0014/social-media-downloader.git
-LOCAL_APP_DIR := .
-PACKAGE_NAME := deployment-package.tar.gz
-VENV_DIR := venv
-VENV_BIN := $(VENV_DIR)/bin
-PYTHON := $(VENV_BIN)/python
-PIP := $(VENV_BIN)/pip
+# ------------------------------------------------------------------------------
+# Configuration & Variables
+# ------------------------------------------------------------------------------
+APP_NAME := social-media-dashboard
+APP_PORT := 8501
+DOCKER_REGISTRY := tdksoft341
+K8S_NAMESPACE := my-app
+DOCKER_COMPOSE_DEV := docker-compose.dev.yml
+DOCKER_COMPOSE_PROD := docker-compose.prod.yml
 
-EXCLUDE_FILE := .tar_exclude
-EXCLUSIONS := .git .coverage __pycache__ venv htmlcov .pytest_cache tests downloads
+# Docker Hub credentials (should be set as environment variables or in CI/CD)
+DOCKER_USERNAME ?= tdksoft341
+DOCKER_TOKEN ?= ${DOCKERHUB_TOKEN}
 
+# Minikube configuration
+MINIKUBE_PROFILE ?= minikube
 
-# Couleurs pour sortie console
-GREEN := \033[0;32m
-YELLOW := \033[0;33m
-RED := \033[0;31m
-NC := \033[0m
+# ------------------------------------------------------------------------------
+# Primary Targets (shown in help)
+# ------------------------------------------------------------------------------
 
-# ------------------------------------------------
-# Aide
-# ------------------------------------------------
-help:
-	@echo "$(GREEN)CI/CD Local Testing Commands:$(NC)"
-	@echo "  $(YELLOW)make venv$(NC)      - Create virtual environment"
-	@echo "  $(YELLOW)make setup$(NC)     - Install dependencies in virtual environment"
-	@echo "  $(YELLOW)make format$(NC)    - Run Black to format code"
-	@echo "  $(YELLOW)make lint$(NC)      - Run linting only"
-	@echo "  $(YELLOW)make unit-test$(NC) - Run unit tests only"
-	@echo "  $(YELLOW)make test$(NC)      - Run lint + tests"
-	@echo "  $(YELLOW)make build$(NC)     - Build deployment package"
-	@echo "  $(YELLOW)make dry-run$(NC)   - Simulate deployment"
-	@echo "  $(YELLOW)make clean$(NC)     - Clean generated files"
-	@echo "  $(YELLOW)make clean-all$(NC) - Clean everything including virtualenv"
-	@echo "  $(YELLOW)make all$(NC)       - Run full pipeline: test + build"
-	@echo "  $(YELLOW)make simulate-github-actions$(NC) - Simulate full GitHub Actions pipeline locally"
+##@ Primary
 
-# ------------------------------------------------
-# Virtualenv
-# ------------------------------------------------
-venv:
-	@echo "$(GREEN)[1/4] Creating virtual environment...$(NC)"
-	@if [ ! -d "$(VENV_DIR)" ]; then \
-		python3 -m venv $(VENV_DIR); \
-		echo "$(GREEN)✓ Virtual environment created$(NC)"; \
-	else \
-		echo "$(YELLOW)Virtual environment already exists$(NC)"; \
-	fi
-	@echo "$(GREEN)✓ Virtual environment ready$(NC)"
+.PHONY: clean
+clean: ## Clean up build artifacts and containers
+	@echo "Cleaning up..."
+	docker system prune -f
+	docker volume prune -f
+	rm -rf build/ dist/ *.egg-info .pytest_cache __pycache__
 
-setup: venv
-	@echo "$(GREEN)[2/4] Installing dependencies...$(NC)"
-	@$(PIP) install --upgrade pip
-	@$(PIP) install -r requirements.txt
-	@$(PIP) install black flake8 pytest pytest-cov
-	@echo "$(GREEN)✓ All dependencies installed$(NC)"
+.PHONY: build
+build: ## Build Docker images
+	@echo "Building Docker images..."
+	docker build -t $(DOCKER_REGISTRY)/$(APP_NAME):latest .
 
-# ------------------------------------------------
-# Formatage avec Black
-# ------------------------------------------------
-format: setup
-	@echo "$(GREEN)[3/4] Running Black formatter...$(NC)"
-	@$(VENV_BIN)/black $(LOCAL_APP_DIR)/ --line-length 79 || echo "$(YELLOW)Black formatting completed with warnings$(NC)"
+.PHONY: up
+up: ## Start development environment
+	@echo "Starting development environment..."
+	docker-compose -f $(DOCKER_COMPOSE_DEV) up -d
 
-# ------------------------------------------------
-# Vérifications
-# ------------------------------------------------
-check-venv:
-	@if [ ! -d "$(VENV_DIR)" ]; then \
-		echo "$(RED)Virtual environment not found. Run 'make venv' first.$(NC)"; \
-		exit 1; \
-	fi
-	@if [ ! -f "$(VENV_BIN)/python" ]; then \
-		echo "$(RED)Python not found in virtual environment. Run 'make setup' first.$(NC)"; \
-		exit 1; \
-	fi
+.PHONY: deploy-dev
+deploy-dev: build push-minikube deploy-minikube ## Deploy to development (minikube)
 
-check-dependencies: check-venv
-	@echo "$(GREEN)Checking if required tools are available...$(NC)"
-	@$(PYTHON) -c "import flake8" 2>/dev/null && echo "$(GREEN)✓ flake8 available$(NC)" || (echo "$(RED)✗ flake8 missing$(NC)" && exit 1)
-	@$(PYTHON) -c "import pytest" 2>/dev/null && echo "$(GREEN)✓ pytest available$(NC)" || (echo "$(RED)✗ pytest missing$(NC)" && exit 1)
+.PHONY: deploy-staging
+deploy-staging: ## Deploy to staging environment
+	@echo "Deploying to staging..."
+	# Add your staging deployment logic here
 
-# ------------------------------------------------
-# Clonage app
-# ------------------------------------------------
-clone-app:
-	@echo "$(GREEN)Cloning application repository...$(NC)"
-	@if [ -d "$(LOCAL_APP_DIR)" ]; then \
-		echo "$(YELLOW)App directory exists, pulling latest changes...$(NC)"; \
-		cd $(LOCAL_APP_DIR) && git pull; \
-	else \
-		git clone $(APP_REPO) $(LOCAL_APP_DIR); \
-	fi
+# ------------------------------------------------------------------------------
+# Development & Testing
+# ------------------------------------------------------------------------------
 
-# ------------------------------------------------
-# Linting
-# ------------------------------------------------
-lint: format clone-app check-dependencies
-	@echo "$(GREEN)[4/4] Running linting...$(NC)"
-	@cd $(LOCAL_APP_DIR) && $(PYTHON) -m flake8 app.py || echo "$(YELLOW)Flake8 check completed with warnings$(NC)"
+##@ Development
 
-# ------------------------------------------------
-# Unit tests
-# ------------------------------------------------
-unit-test: setup clone-app check-dependencies
-	@echo "$(GREEN)Running unit tests...$(NC)"
-	@cd $(LOCAL_APP_DIR) && \
-	if [ -d "tests" ]; then \
-		$(PYTHON) -m pytest tests/ -v --cov=app --cov-report=term --cov-report=html; \
-	else \
-		mkdir -p tests; \
-		echo 'def test_example(): assert True' > tests/test_example.py; \
-		$(PYTHON) -m pytest tests/ -v; \
-	fi
-	@echo "$(GREEN)Tests completed!$(NC)"
+.PHONY: dev
+dev: up ## Alias for starting development environment
 
-test: lint unit-test
-	@echo "$(GREEN)All tests passed successfully!$(NC)"
+.PHONY: down
+down: ## Stop development environment
+	docker-compose -f $(DOCKER_COMPOSE_DEV) down
 
-# ------------------------------------------------
-# Build deployment package
-# ------------------------------------------------
-	@echo "$(GREEN)Building deployment package...$(NC)"
-	
-	# 1. Gérer les dépendances
-	@if [ -f "requirements.txt" ]; then \
-		echo "$(GREEN)Found requirements.txt$(NC)"; \
-	else \
-		$(PIP) freeze > requirements.txt; \
-	fi
-	
-	# 2. Créer le fichier d'exclusions (-X)
-	@echo "$(YELLOW)Creating exclusion file $(EXCLUDE_FILE)...$(NC)"
-	@echo $(EXCLUSIONS) | tr ' ' '\n' > $(EXCLUDE_FILE)
-	
-	# 3. Archiver dans le répertoire temporaire (/tmp) avec verbosité (-v)
-	@echo "$(YELLOW)Creating deployment package in /tmp using -X and -v...$(NC)"
-	# Utilisation directe du chemin /tmp pour la destination
-	tar -cvzf /tmp/$(PACKAGE_NAME) -X $(EXCLUDE_FILE) -C $(LOCAL_APP_DIR) . 
-	
-	# 4. Déplacer l'archive vers le répertoire courant et nettoyer
-	@echo "$(YELLOW)Moving package from temp to current directory and cleaning up...$(NC)"
-	@mv /tmp/$(PACKAGE_NAME) .
-	@rm $(EXCLUDE_FILE) # Supprimer le fichier d'exclusions temporaire
-	
-	@echo "$(GREEN)Package created: $(PACKAGE_NAME)$(NC)"
-	@ls -lh $(PACKAGE_NAME)
-	@echo "$(GREEN)Build completed!$(NC)"
+.PHONY: logs
+logs: ## View development logs
+	docker-compose -f $(DOCKER_COMPOSE_DEV) logs -f
 
-	
-# ------------------------------------------------
-# Simulate deployment
-# ------------------------------------------------
-dry-run:
-	@echo "$(GREEN)Simulating deployment...$(NC)"
-	@if [ -f "$(PACKAGE_NAME)" ]; then \
-		echo "$(GREEN)✓ Deployment package exists: $(PACKAGE_NAME)$(NC)"; \
-	else \
-		echo "$(RED)✗ Deployment package missing. Run 'make build' first.$(NC)"; \
-	fi
+.PHONY: test
+test: ## Run tests
+	@echo "Running tests..."
+	pytest ./tests/ -v
 
-# ------------------------------------------------
-# Simulate full GitHub Actions pipeline
-# ------------------------------------------------
-simulate-github-actions:
-	@echo "$(GREEN)=== Simulating GitHub Actions pipeline ===$(NC)"
-	@$(MAKE) setup || (echo "$(RED)Setup failed$(NC)" && exit 1)
-	@$(MAKE) test || (echo "$(RED)Test job failed$(NC)" && exit 1)
-	@$(MAKE) build || (echo "$(RED)Build job failed$(NC)" && exit 1)
-	@$(MAKE) dry-run
-	@echo "$(GREEN)✅ Pipeline local simulée avec succès$(NC)"
+.PHONY: lint
+lint: ## Run code linting
+	@echo "Running linting..."
+	# Add your linting commands here, e.g., flake8, black, etc.
 
-# ------------------------------------------------
-# Clean
-# ------------------------------------------------
-clean:
-	@echo "$(GREEN)Cleaning generated files...$(NC)"
-	@rm -f $(PACKAGE_NAME)
-	@rm -rf htmlcov .coverage coverage.xml
-	@if [ "$(LOCAL_APP_DIR)" != "." ]; then \
-		rm -rf $(LOCAL_APP_DIR); \
-	fi
-	@echo "$(GREEN)Generated files removed!$(NC)"
+# ------------------------------------------------------------------------------
+# Minikube Deployment
+# ------------------------------------------------------------------------------
 
-clean-all: clean
-	@echo "$(GREEN)Cleaning virtual environment...$(NC)"
-	@rm -rf $(VENV_DIR)
-	@echo "$(GREEN)Virtual environment removed!$(NC)"
+##@ Kubernetes
 
-# ------------------------------------------------
-# Aliases
-# ------------------------------------------------
-all: simulate-github-actions
-ci: simulate-github-actions
-local-ci: simulate-github-actions
-full-test: test build dry-run
+.PHONY: minikube-setup
+minikube-setup: ## Setup and configure minikube
+	@echo "Setting up minikube..."
+	minikube start --profile=$(MINIKUBE_PROFILE)
+	minikube addons enable ingress --profile=$(MINIKUBE_PROFILE)
+	@echo "Minikube dashboard: minikube dashboard --profile=$(MINIKUBE_PROFILE)"
+
+.PHONY: minikube-tunnel
+minikube-tunnel: ## Start tunnel for minikube services (run in separate terminal)
+	@echo "Starting minikube tunnel (keep this running)..."
+	minikube tunnel --profile=$(MINIKUBE_PROFILE)
+
+.PHONY: eval-minikube
+eval-minikube: ## Set docker env to minikube's
+	@echo "Setting up minikube docker environment..."
+	eval $$(minikube docker-env --profile=$(MINIKUBE_PROFILE))
+
+.PHONY: build-minikube
+build-minikube: eval-minikube ## Build image directly in minikube
+	@echo "Building image in minikube environment..."
+	docker build -t $(APP_NAME):latest .
+
+.PHONY: push-minikube
+push-minikube: ## Push image to registry (for minikube pull)
+	@echo "Pushing image to Docker Hub..."
+	docker push $(DOCKER_REGISTRY)/$(APP_NAME):latest
+
+.PHONY: deploy-minikube
+deploy-minikube: ## Deploy application to minikube
+	@echo "Deploying to minikube..."
+	kubectl apply -f k8s/namespace.yaml
+	kubectl apply -f k8s/configmap.yaml
+	kubectl apply -f k8s/deployment.yaml
+	kubectl apply -f k8s/service.yaml
+	kubectl apply -f k8s/ingress.yaml
+	@echo "Deployment complete. Use 'make minikube-status' to check status."
+
+.PHONY: minikube-status
+minikube-status: ## Check minikube deployment status
+	@echo "=== Pods ==="
+	kubectl get pods -n $(K8S_NAMESPACE)
+	@echo "=== Services ==="
+	kubectl get svc -n $(K8S_NAMESPACE)
+	@echo "=== Ingress ==="
+	kubectl get ingress -n $(K8S_NAMESPACE)
+
+.PHONY: minikube-logs
+minikube-logs: ## View application logs from minikube
+	kubectl logs -l app=$(APP_NAME) -n $(K8S_NAMESPACE) -f
+
+.PHONY: minikube-delete
+minikube-delete: ## Delete application from minikube
+	kubectl delete -f k8s/ -n $(K8S_NAMESPACE)
+
+# ------------------------------------------------------------------------------
+# Docker Management
+# ------------------------------------------------------------------------------
+
+##@ Docker
+
+.PHONY: docker-login
+docker-login: ## Login to Docker registry
+	echo "$(DOCKERHUB_TOKEN)" | docker login -u "$(DOCKER_USERNAME)" --password-stdin
+
+.PHONY: docker-push
+docker-push: build ## Build and push to registry
+	docker push $(DOCKER_REGISTRY)/$(APP_NAME):latest
+
+.PHONY: docker-clean
+docker-clean: ## Clean Docker images and containers
+	docker system prune -a -f
+
+# ------------------------------------------------------------------------------
+# Utility Targets
+# ------------------------------------------------------------------------------
+
+##@ Utility
+
+.PHONY: help
+help: ## Display this help message
+	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
+
+.PHONY: status
+status: ## Check status of all services
+	@echo "=== Docker Containers ==="
+	docker ps
+	@echo "=== Kubernetes Pods ==="
+	kubectl get pods -A
+
+.PHONY: version
+version: ## Show versions
+	@echo "Docker: $$(docker --version)"
+	@echo "Kubectl: $$(kubectl version --client --short)"
+	@echo "Minikube: $$(minikube version --short)"

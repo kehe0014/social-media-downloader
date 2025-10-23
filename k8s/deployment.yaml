@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: social-media-scrapper-deployment
+  namespace: my-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: social-media-scrapper
+  template:
+    metadata:
+      labels:
+        app: social-media-scrapper
+    spec:
+      containers:
+      - name: social-media-scrapper
+        image: tdksoft341/social-media-dashboard:latest
+        ports:
+        - containerPort: 8501
+        envFrom:
+        - configMapRef:
+            name: social-media-scrapper-config

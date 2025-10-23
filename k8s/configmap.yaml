@@ -1,0 +1,68 @@
+# ==============================================================================
+# Kubernetes ConfigMap for Application Configuration
+# Description: External configuration for the application
+# ==============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: social-media-scrapper-config
+  namespace: my-app
+  labels:
+    app.kubernetes.io/name: social-media-scrapper
+    app.kubernetes.io/instance: social-media-scrapper-dev
+    app.kubernetes.io/environment: development
+data:
+  # ----------------------------------------------------------------------------
+  # Application Configuration
+  # ----------------------------------------------------------------------------
+  APP_ENV: "development"
+  APP_NAME: "social-media-scrapper"
+  APP_VERSION: "1.0.0"
+
+  # ----------------------------------------------------------------------------
+  # Server Configuration
+  # ----------------------------------------------------------------------------
+  SERVER_HOST: "0.0.0.0"
+  SERVER_PORT: "8501" # Port where the application will run
+  # Note: These are typically passed to the entrypoint command or an init script
+  WORKERS_PER_CORE: "1.0"
+  MAX_WORKERS: "4"
+  WEB_CONCURRENCY: "2"
+
+  # ----------------------------------------------------------------------------
+  # Database Configuration
+  # ----------------------------------------------------------------------------
+  # Note: DATABASE_URL should be composed from DB_HOST/PORT/USER/NAME in the application
+  # or you can use a templating engine like Helm.
+  DATABASE_URL: "sqlite:///./app.db"
+  DB_HOST: "localhost" # For a local database (not ideal), or the internal service name
+  DB_PORT: "5432"
+  DB_NAME: "myapp"
+  DB_USER: "appuser"
+  # DB_PASSWORD should be in the Secret!
+
+  # ----------------------------------------------------------------------------
+  # Logging Configuration
+  # ----------------------------------------------------------------------------
+  LOG_LEVEL: "INFO"
+  LOG_FORMAT: "json"
+
+  # ----------------------------------------------------------------------------
+  # Feature Flags
+  # ----------------------------------------------------------------------------
+  FEATURE_AUTH_ENABLED: "true"
+  FEATURE_CACHE_ENABLED: "false"
+  FEATURE_API_DOCS: "true"
+
+  # ----------------------------------------------------------------------------
+  # External Services
+  # ----------------------------------------------------------------------------
+  API_TIMEOUT: "30"
+  MAX_RETRIES: "3"
+
+  # ----------------------------------------------------------------------------
+  # Security Configuration (non-secret parts)
+  # ----------------------------------------------------------------------------
+  # Single-quotes are fine for the JSON string
+  CORS_ORIGINS: '["http://localhost:3000", "http://127.0.0.1:3000"]'
+  CORS_ALLOW_CREDENTIALS: "true"

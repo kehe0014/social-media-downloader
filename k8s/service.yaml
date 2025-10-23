@@ -1,0 +1,15 @@
+# k8s/service.yaml (CORRECT)
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: social-media-scrapper-service
+  namespace: my-app
+spec:
+  selector:
+    app: social-media-scrapper
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 8501
+  type: ClusterIP

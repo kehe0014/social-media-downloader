@@ -34,6 +34,6 @@ def test_get_video_info(mock_extract):
 
 # --- Test que le module peut être importé ---
 def test_import_app():
-    import app
+    import app.app as app
 
     assert hasattr(app, "st")
