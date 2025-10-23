@@ -12,7 +12,7 @@ on:
   # Run on push events to the main branch
   push:
     branches:
-      - main
+      - develop
   # Run on pull request events targeting the main branch
   pull_request:
     branches:
