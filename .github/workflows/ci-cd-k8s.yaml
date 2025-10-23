@@ -74,7 +74,6 @@ jobs:
         with:
           context: .
           push: true
-          # Fully qualified tags: tdk341/social-media-dashboard:sha
           # tags: ${{ env.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
           # Also tag as 'latest'
           tags: |
@@ -96,7 +95,7 @@ jobs:
         with:
           host: ${{ env.K3S_HOST }}
           username: ${{ env.K3S_USERNAME }}
-          key: ${{ secrets.VPS_SSH_KEY }}
+          key: ${{ secrets.SSH_PRIVATE_KEY_1BLU }}
           script: |
             echo "--- Starting K3S Deployment to Namespace: ${K8S_NAMESPACE} ---"
             
