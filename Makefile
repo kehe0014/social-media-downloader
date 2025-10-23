@@ -85,27 +85,29 @@ lint: ## Run code linting
 ##@ Kubernetes
 
 .PHONY: simulate-deploy-k8s
-simulate-deploy-k8s: ## Dry run the Kubernetes deployment steps locally
+simulate-deploy-k8s: ## Dry run the Kubernetes deployment steps locally (using the $(K8S_NAMESPACE) variable)
 	@echo "========================================================"
-	@echo "SIMULATING K3S PRODUCTION DEPLOYMENT (DRY RUN)"
+	@echo "SIMULATING DEPLOYMENT DRY RUN to $(K8S_NAMESPACE) namespace"
 	@echo "========================================================"
+	
 	@echo "1. Checking Namespace Creation (Simulated)"
+	# Simulates the initial 'kubectl create namespace' step using 'my-app'
 	@echo "   (Action: kubectl create namespace $(K8S_NAMESPACE) --dry-run=client)"
 	
 	@echo "\n2. Simulating GHCR ImagePullSecret Creation (Dry Run)"
-	# Use a placeholder for secrets since you can't access GitHub secrets locally
 	@echo "   (Action: kubectl create secret docker-registry ghcr-auth-secret --namespace=$(K8S_NAMESPACE) --dry-run=client)"
 	
-	@echo "\n3. Checking Kubernetes Manifests (Dry Run)"
-	# This command attempts to parse and validate your YAMLs without applying them
+	@echo "\n3. Checking Kubernetes Manifests (Dry Run - Full Output)"
 	@echo "   (Action: kubectl apply -f k8s/ --namespace=$(K8S_NAMESPACE) --dry-run=client -o yaml)"
+	# This command performs the main validation and shows the resulting YAML.
 	kubectl apply -f k8s/ --namespace=$(K8S_NAMESPACE) --dry-run=client -o yaml
 	
 	@echo "\n4. Simulating Deployment Rollout Status Check"
 	@echo "   (Action: kubectl rollout status deployment/social-media-scrapper-deployment -n $(K8S_NAMESPACE) --dry-run=client)"
 	
-	@echo "\n5. Final Check: Would deploy the following resources:"
-	kubectl get -f k8s/ -n $(K8S_NAMESPACE) --dry-run=client
+	@echo "\n5. Final Check: Would apply the following resources:"
+	# 🔥 FIX: Replaced the invalid 'kubectl get --dry-run' with 'kubectl apply --dry-run=client'
+	kubectl apply -f k8s/ -n $(K8S_NAMESPACE) --dry-run=client 
 	
 	@echo "\n✅ Dry run complete. Review the output for any Kubernetes errors."
 
