@@ -84,6 +84,31 @@ lint: ## Run code linting
 
 ##@ Kubernetes
 
+.PHONY: simulate-deploy-k8s
+simulate-deploy-k8s: ## Dry run the Kubernetes deployment steps locally
+	@echo "========================================================"
+	@echo "SIMULATING K3S PRODUCTION DEPLOYMENT (DRY RUN)"
+	@echo "========================================================"
+	@echo "1. Checking Namespace Creation (Simulated)"
+	@echo "   (Action: kubectl create namespace $(K8S_NAMESPACE) --dry-run=client)"
+	
+	@echo "\n2. Simulating GHCR ImagePullSecret Creation (Dry Run)"
+	# Use a placeholder for secrets since you can't access GitHub secrets locally
+	@echo "   (Action: kubectl create secret docker-registry ghcr-auth-secret --namespace=$(K8S_NAMESPACE) --dry-run=client)"
+	
+	@echo "\n3. Checking Kubernetes Manifests (Dry Run)"
+	# This command attempts to parse and validate your YAMLs without applying them
+	@echo "   (Action: kubectl apply -f k8s/ --namespace=$(K8S_NAMESPACE) --dry-run=client -o yaml)"
+	kubectl apply -f k8s/ --namespace=$(K8S_NAMESPACE) --dry-run=client -o yaml
+	
+	@echo "\n4. Simulating Deployment Rollout Status Check"
+	@echo "   (Action: kubectl rollout status deployment/social-media-scrapper-deployment -n $(K8S_NAMESPACE) --dry-run=client)"
+	
+	@echo "\n5. Final Check: Would deploy the following resources:"
+	kubectl get -f k8s/ -n $(K8S_NAMESPACE) --dry-run=client
+	
+	@echo "\n✅ Dry run complete. Review the output for any Kubernetes errors."
+
 .PHONY: minikube-setup
 minikube-setup: ## Setup and configure minikube
 	@echo "Setting up minikube..."
