@@ -95,7 +95,7 @@ jobs:
         with:
           host: ${{ env.K3S_HOST }}
           username: ${{ env.K3S_USERNAME }}
-          key: ${{ secrets.SSH_PRIVATE_KEY_1BLU }}
+          key: ${{ secrets.SSH_VPS_DE }}
           script: |
             echo "--- Starting K3S Deployment to Namespace: ${K8S_NAMESPACE} ---"
             
