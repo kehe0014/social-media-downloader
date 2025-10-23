@@ -58,7 +58,7 @@ jobs:
           pip install pytest
           
           echo "Running tests..."
-          pytest ./tests/ || exit 1
+          pytest ./app/tests/ || exit 1
           echo "Tests finished successfully."
 
       # --- Docker Build and Push Steps ---
