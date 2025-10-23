@@ -1,8 +1,8 @@
 # ==============================================================================
 # Workflow: Continuous Integration and Continuous Deployment (CI/CD) to K3S
-# Description: Builds, tests, pushes to GHCR, and deploys to a remote K3s cluster.
+# Description: Builds, tests, pushes to Docker Hub, and deploys to a remote K3s cluster.
 # ==============================================================================
-name: CI/CD Pipeline to K3S (Production)
+name: CI/CD Pipeline to K3S (Production - Docker Hub)
 
 # ------------------------------------------------------------------------------
 # Workflow Triggers
@@ -20,27 +20,27 @@ on:
 # ------------------------------------------------------------------------------
 env:
   PYTHON_VERSION: '3.10'
-  # --- GitHub Container Registry (GHCR) Variables ---
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }} # e.g., <your-username>/social-media-dashboard
-  IMAGE_TAG: ${{ github.sha }}        # Use commit SHA for unique versioning
+  # --- Docker Hub Variables ---
+  DOCKER_USERNAME: tdk341                           # Your Docker Hub Username
+  REGISTRY: docker.io
+  IMAGE_NAME: social-media-dashboard               # Define a clean image name
+  IMAGE_TAG: ${{ github.sha }}                     # Use commit SHA for unique versioning
   # --- Kubernetes Deployment Variables ---
-  K8S_NAMESPACE: prod                  # Production namespace as requested
-  K3S_HOST: 178.254.23.139             # Remote K3s server IP
-  K3S_USERNAME: hkengne                # SSH user for the K3s server
+  K8S_NAMESPACE: prod                              # Production namespace
+  K3S_HOST: 178.254.23.139                         # Remote K3s server IP
+  K3S_USERNAME: hkengne                            # SSH user for the K3s server
 
 # ------------------------------------------------------------------------------
 # Jobs
 # ------------------------------------------------------------------------------
 jobs:
-  ## Job 1: Build, Test, and Push Docker Image to GHCR
+  ## Job 1: Build, Test, and Push Docker Image to Docker Hub
   build-test-and-publish:
-    name: Build, Test & Push to GHCR
+    name: Build, Test & Push to Docker Hub
     runs-on: ubuntu-latest
     
     permissions:
       contents: read
-      packages: write # Required to push to GitHub Packages (GHCR)
       
     steps:
       - name: Checkout Repository
@@ -55,38 +55,32 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          # Install testing tools
           pip install pytest
           
           echo "Running tests..."
-          pytest ./tests/ || exit 1 # Fail fast if tests do not pass
+          pytest ./tests/ || exit 1
           echo "Tests finished successfully."
 
       # --- Docker Build and Push Steps ---
-      - name: Log in to GitHub Container Registry (GHCR)
+      - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }} # Use the built-in GITHUB_TOKEN
+          username: ${{ env.DOCKER_USERNAME }}
+          # Use the PAT stored in secrets for authentication
+          password: ${{ secrets.DOCKERHUB_PAT }} 
 
-      - name: Build Docker Image
-        id: docker_build
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: false # Only build for now
-
-      - name: Build and Push Docker Image
+      - name: Build and Push Docker Image to Docker Hub
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
-          # Also tag as 'latest' for convenience TODO
-         # tags: |
-          #  ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-         # cache-from: type=gha # Use GitHub Actions cache for faster builds
+          # Fully qualified tags: tdk341/social-media-dashboard:sha
+          tags: ${{ env.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+          # Also tag as 'latest'
+          tags: |
+            ${{ env.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+            ${{ env.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:latest
+          cache-from: type=gha
 
 
   ## Job 2: Deploy to K3S Cluster
@@ -94,66 +88,31 @@ jobs:
     name: Deploy to K3S Production
     needs: build-test-and-publish
     runs-on: ubuntu-latest
-    # Only deploy on pushes to the main branch
     if: github.ref == 'refs/heads/main'
 
     steps:
-      # Use an action that allows running remote shell commands via SSH
       - name: Deploy Kubernetes Manifests via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ env.K3S_HOST }}
           username: ${{ env.K3S_USERNAME }}
-          key: ${{ secrets.VPS_SSH_KEY }} # Assumes SSH key is correctly stored
-          # Install k3s kubeconfig and use kubectl to deploy
+          key: ${{ secrets.VPS_SSH_KEY }}
           script: |
             echo "--- Starting K3S Deployment to Namespace: ${K8S_NAMESPACE} ---"
             
             # 1. Create the production namespace if it doesn't exist
             kubectl create namespace ${K8S_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
             
-            # 2. Create the Secret for GHCR credentials (ImagePullSecret)
-            # This is critical for k3s to pull the image from GHCR
-            echo "Creating/Updating GHCR ImagePullSecret..."
-            kubectl create secret docker-registry ghcr-auth-secret \
-                --namespace=${K8S_NAMESPACE} \
-                --docker-server="${{ env.REGISTRY }}" \
-                --docker-username="${{ github.actor }}" \
-                --docker-password="${{ secrets.GITHUB_TOKEN }}" \
-                --dry-run=client -o yaml | kubectl apply -f -
+            # 2. Apply Kubernetes Manifests (ensuring image is updated)
+            echo "Applying Kubernetes manifests..."
             
-            # 3. Apply Kubernetes Manifests (Deployment, Service, Ingress, etc.)
-            echo "Applying Kubernetes manifests from k8s/ directory..."
-            # Note: You must ensure your k8s manifests use the correct namespace and image tag!
-            # We'll use sed to inject the correct image tag and namespace into your files.
-            
-            # Clone repo on server to ensure scripts/k8s files are available
-            # This is usually NOT the best way, but simpler than pushing files via scp
-            
-            # --- Better approach: Use local files and kubectl apply over SSH ---
-            # Alternatively, if you are using tools like Helm or kustomize, use those.
-            
-            # Assuming you have templated k8s manifests that need the image tag
-            # This requires you to have the k8s files on the remote server
-            
-            # A cleaner alternative: use `sed` to inject variables into the k8s deployment file locally and apply it:
-            # For this to work, you need to use `kubectl apply` on the remote server.
-            
-            # --- For simplicity, we assume your deployment file is ready on the server or use a basic kubectl run ---
-            # If your k8s manifests are static and already configured for the 'prod' namespace:
+            # Apply all manifests, overriding the namespace to 'prod'
             kubectl apply -f /path/to/your/k8s/manifests -n ${K8S_NAMESPACE}
-            
-            # --- If you want to use the image pushed in Job 1: ---
-            # The most robust way is to use a templating tool (like Helm or Kustomize)
-            # or use `envsubst` after copying the files.
-            
-            # For this example, we'll assume you update your k8s/deployment.yaml to use the tag:
-            # ghcr.io/${{ github.repository }}:${{ env.IMAGE_TAG }}
             
             echo "Deployment triggered. Checking status..."
             kubectl rollout status deployment/social-media-scrapper-deployment -n ${K8S_NAMESPACE} --timeout=5m
             
-            # 4. Final Status Check
+            # 3. Final Status Check
             if [ $? -eq 0 ]; then
                 echo "✅ Deployment completed successfully!"
                 kubectl get all -n ${K8S_NAMESPACE}
