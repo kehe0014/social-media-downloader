@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import patch, MagicMock
-from downloader.yt_utils import get_video_info, download_media
+from app.downloader.yt_utils import get_video_info, download_media
 from downloader.file_utils import ensure_dir
 import os
 
