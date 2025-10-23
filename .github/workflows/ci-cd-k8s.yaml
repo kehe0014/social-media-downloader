@@ -1,34 +1,21 @@
-# ==============================================================================
-# Workflow: Continuous Integration and Continuous Deployment (CI/CD) to K3S
-# Description: Builds, tests, pushes to Docker Hub, and deploys to a remote K3s cluster.
-# ==============================================================================
 name: CI/CD Pipeline to K3S (Production - Docker Hub)
 
-# ------------------------------------------------------------------------------
-# Workflow Triggers
-# ------------------------------------------------------------------------------
 on:
   push:
     branches:
       - main
   workflow_dispatch:
 
-# ------------------------------------------------------------------------------
-# Environment Variables
-# ------------------------------------------------------------------------------
 env:
   PYTHON_VERSION: '3.10'
   DOCKER_USERNAME: tdksoft341
   REGISTRY: docker.io
   IMAGE_NAME: social-media-dashboard
   IMAGE_TAG: ${{ github.sha }}
-  K8S_NAMESPACE: prod
+  K8S_NAMESPACE: my-app  # Match your existing namespace
   K3S_HOST: 178.254.23.139
   K3S_USERNAME: hkengne
 
-# ------------------------------------------------------------------------------
-# Jobs
-# ------------------------------------------------------------------------------
 jobs:
   build-test-and-publish:
     name: Build, Test & Push to Docker Hub
@@ -69,7 +56,7 @@ jobs:
     if: github.ref == 'refs/heads/main'
 
     steps:
-      - name: Deploy Kubernetes Manifests via SSH
+      - name: Deploy to K3S Cluster
         uses: appleboy/ssh-action@v1.0.3
         env:
           K8S_NAMESPACE: ${{ env.K8S_NAMESPACE }}
@@ -83,32 +70,40 @@ jobs:
             echo "--- Starting K3S Deployment to Namespace: ${K8S_NAMESPACE} ---"
             echo "Using image: ${IMAGE_NAME}"
             
-            # 1. Create the production namespace if it doesn't exist
-            kubectl create namespace "${K8S_NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
+            # Verify namespace exists
+            if ! kubectl get namespace "${K8S_NAMESPACE}" &> /dev/null; then
+              echo "Namespace ${K8S_NAMESPACE} does not exist. Creating it..."
+              kubectl create namespace "${K8S_NAMESPACE}"
+            fi
             
-            # 2. Update the deployment with the new image
-            echo "Updating deployment with new image..."
-            kubectl set image deployment/social-media-scrapper-deployment \
-              social-media-scrapper=${IMAGE_NAME} -n "${K8S_NAMESPACE}" --record
+            # Verify deployment exists
+            echo "Checking for existing deployment..."
+            if kubectl get deployment social-media-scrapper-deployment -n "${K8S_NAMESPACE}" &> /dev/null; then
+              echo "✅ Deployment found. Updating image..."
+              kubectl set image deployment/social-media-scrapper-deployment \
+                social-media-scrapper="${IMAGE_NAME}" -n "${K8S_NAMESPACE}"
+            else
+              echo "❌ Deployment not found in namespace ${K8S_NAMESPACE}"
+              echo "Please ensure your deployment manifest is applied to the correct namespace"
+              exit 1
+            fi
             
-            # 3. Apply any other Kubernetes manifests (update the path to your actual manifests)
-            # kubectl apply -f ./k8s-manifests/ -n "${K8S_NAMESPACE}"
-            
-            echo "Deployment triggered. Checking status..."
+            echo "Deployment update triggered. Checking rollout status..."
             kubectl rollout status deployment/social-media-scrapper-deployment -n "${K8S_NAMESPACE}" --timeout=5m
             
-            # 4. Final Status Check
             if [ $? -eq 0 ]; then
                 echo "✅ Deployment completed successfully!"
                 echo "--- Current deployment status ---"
                 kubectl get deployment social-media-scrapper-deployment -n "${K8S_NAMESPACE}"
                 echo "--- Pods ---"
                 kubectl get pods -n "${K8S_NAMESPACE}" -l app=social-media-scrapper
+                echo "--- Container images ---"
+                kubectl get pods -n "${K8S_NAMESPACE}" -l app=social-media-scrapper -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.spec.containers[*].image}{"\n"}{end}'
             else
                 echo "❌ Deployment failed!"
                 echo "--- Deployment description ---"
                 kubectl describe deployment social-media-scrapper-deployment -n "${K8S_NAMESPACE}"
-                echo "--- Pods logs ---"
-                kubectl logs -n "${K8S_NAMESPACE}" -l app=social-media-scrapper --tail=50
+                echo "--- Recent events ---"
+                kubectl get events -n "${K8S_NAMESPACE}" --sort-by='.lastTimestamp' | tail -10
                 exit 1
             fi
