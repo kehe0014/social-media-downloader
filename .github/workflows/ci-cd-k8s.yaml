@@ -8,11 +8,9 @@ name: CI/CD Pipeline to K3S (Production - Docker Hub)
 # Workflow Triggers
 # ------------------------------------------------------------------------------
 on:
-  # Only run on push events to the main branch for PROD deployment
   push:
     branches:
       - main
-  # Allow manual execution for quick re-deployments
   workflow_dispatch:
 
 # ------------------------------------------------------------------------------
@@ -20,21 +18,18 @@ on:
 # ------------------------------------------------------------------------------
 env:
   PYTHON_VERSION: '3.10'
-  # --- Docker Hub Variables ---
-  DOCKER_USERNAME: tdksoft341                           # Your Docker Hub Username
+  DOCKER_USERNAME: tdksoft341
   REGISTRY: docker.io
-  IMAGE_NAME: social-media-dashboard               # Define a clean image name
-  IMAGE_TAG: ${{ github.sha }}                     # Use commit SHA for unique versioning
-  # --- Kubernetes Deployment Variables ---
-  K8S_NAMESPACE: prod                              # Production namespace
-  K3S_HOST: 178.254.23.139                         # Remote K3s server IP
-  K3S_USERNAME: hkengne                            # SSH user for the K3s server
+  IMAGE_NAME: social-media-dashboard
+  IMAGE_TAG: ${{ github.sha }}
+  K8S_NAMESPACE: prod
+  K3S_HOST: 178.254.23.139
+  K3S_USERNAME: hkengne
 
 # ------------------------------------------------------------------------------
 # Jobs
 # ------------------------------------------------------------------------------
 jobs:
-  ## Job 1: Build, Test, and Push Docker Image to Docker Hub
   build-test-and-publish:
     name: Build, Test & Push to Docker Hub
     runs-on: ubuntu-latest
@@ -50,39 +45,23 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-          
-     # - name: Install Dependencies & Run Tests TODO: FIX TESTS
-     #   run: |
-      #    python -m pip install --upgrade pip
-      #    if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-      #    pip install pytest
-          
-      #    echo "Running tests..."
-      #    pytest ./app/tests/ || exit 1
-      #    echo "Tests finished successfully."
 
-      # --- Docker Build and Push Steps ---
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ env.DOCKER_USERNAME }}
-          # Use the PAT stored in secrets for authentication
-          password: ${{ secrets.DOCKERHUB_PAT }} 
+          password: ${{ secrets.DOCKERHUB_PAT }}
 
       - name: Build and Push Docker Image to Docker Hub
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          # tags: ${{ env.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
-          # Also tag as 'latest'
           tags: |
             ${{ env.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
             ${{ env.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:latest
-          cache-from: type=gha  
+          cache-from: type=gha
 
-
-  ## Job 2: Deploy to K3S Cluster
   deploy-k8s:
     name: Deploy to K3S Production
     needs: build-test-and-publish
@@ -92,30 +71,44 @@ jobs:
     steps:
       - name: Deploy Kubernetes Manifests via SSH
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          K8S_NAMESPACE: ${{ env.K8S_NAMESPACE }}
+          IMAGE_NAME: ${{ env.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
         with:
           host: ${{ env.K3S_HOST }}
           username: ${{ env.K3S_USERNAME }}
           key: ${{ secrets.SSH_VPS_DE }}
+          envs: K8S_NAMESPACE,IMAGE_NAME
           script: |
             echo "--- Starting K3S Deployment to Namespace: ${K8S_NAMESPACE} ---"
+            echo "Using image: ${IMAGE_NAME}"
             
             # 1. Create the production namespace if it doesn't exist
-            kubectl create namespace ${K8S_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+            kubectl create namespace "${K8S_NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
             
-            # 2. Apply Kubernetes Manifests (ensuring image is updated)
-            echo "Applying Kubernetes manifests..."
+            # 2. Update the deployment with the new image
+            echo "Updating deployment with new image..."
+            kubectl set image deployment/social-media-scrapper-deployment \
+              social-media-scrapper=${IMAGE_NAME} -n "${K8S_NAMESPACE}" --record
             
-            # Apply all manifests, overriding the namespace to 'prod'
-            kubectl apply -f /path/to/your/k8s/manifests -n ${K8S_NAMESPACE}
+            # 3. Apply any other Kubernetes manifests (update the path to your actual manifests)
+            # kubectl apply -f ./k8s-manifests/ -n "${K8S_NAMESPACE}"
             
             echo "Deployment triggered. Checking status..."
-            kubectl rollout status deployment/social-media-scrapper-deployment -n ${K8S_NAMESPACE} --timeout=5m
+            kubectl rollout status deployment/social-media-scrapper-deployment -n "${K8S_NAMESPACE}" --timeout=5m
             
-            # 3. Final Status Check
+            # 4. Final Status Check
             if [ $? -eq 0 ]; then
                 echo "✅ Deployment completed successfully!"
-                kubectl get all -n ${K8S_NAMESPACE}
+                echo "--- Current deployment status ---"
+                kubectl get deployment social-media-scrapper-deployment -n "${K8S_NAMESPACE}"
+                echo "--- Pods ---"
+                kubectl get pods -n "${K8S_NAMESPACE}" -l app=social-media-scrapper
             else
-                echo "❌ Deployment failed! Rollout did not complete."
+                echo "❌ Deployment failed!"
+                echo "--- Deployment description ---"
+                kubectl describe deployment social-media-scrapper-deployment -n "${K8S_NAMESPACE}"
+                echo "--- Pods logs ---"
+                kubectl logs -n "${K8S_NAMESPACE}" -l app=social-media-scrapper --tail=50
                 exit 1
             fi
