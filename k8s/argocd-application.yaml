@@ -20,3 +20,4 @@ spec:
       selfHeal: true # Corrige l'état du cluster s'il diverge de Git
     syncOptions:
     - CreateNamespace=true # ArgoCD créera le namespace 'my-app' si nécessaire
+    - ApplyOutOfSyncOnly=true # N'applique les changements que lorsque l'état diverge
