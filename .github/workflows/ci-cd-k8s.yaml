@@ -1,51 +1,11 @@
-name: CI/CD Pipeline to K3S via SSH
-
-on:
-  push:
-    branches:
-      - main
-    # Exclusion : n'exécute pas le CI sur les commits automatiques faits par cette même action
-    # Note: les commits automatiques faits par cette même action ne déclenchent pas de nouvelles exécutions du workflow.
-    paths-ignore:
-      - 'k8s/deployment.yaml' 
-
-env:
-  PYTHON_VERSION: '3.10'
-
-  # Docker Hub Credentials and Image Info
-  DOCKER_USERNAME: tdksoft341
-  REGISTRY: docker.io
-  IMAGE_NAME: social-media-dashboard
-  IMAGE_TAG: ${{ github.sha }}
- 
-  # K3S and App Deployment Info
-  K8S_NAMESPACE: my-app
-  K3S_HOST: 178.254.23.139
-  K3S_USERNAME: hkengne
-  APP_DOMAIN: http://178.254.23.139
-
-  # k8s manifests path
-  K8S_MANIFESTS_PATH: k8s/
-
-  # Github Personal Access Token for pushing changes
-  GH_PAT: ${{ secrets.GH_PAT }}
-
-jobs:
-  build-and-push:
-    name: Build & Push Docker Image
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Log in to Docker Hubname: CI/CD Pipeline to K3S via SSH
+name: CI/CD Pipeline to K3S via argocd GitOps
 
 on:
   push:
     branches:
       - main
     paths-ignore:
+      # Ignorer les modifications dans les fichiers non pertinents
       - 'k8s/deployment.yaml'
 
 env:
