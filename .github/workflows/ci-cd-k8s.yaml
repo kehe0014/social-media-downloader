@@ -34,9 +34,6 @@ jobs:
   build-and-push:
     name: Build & Push Docker Image
     runs-on: ubuntu-latest
-    #permissions:
-      # Give the default GITHUB_TOKEN write permission to commit and push the changed files back to the repository.
-      #contents: write
     
     steps:
       - name: Checkout Repository
