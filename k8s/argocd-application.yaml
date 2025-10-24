@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: social-media-dashboard # Nom unique de l'application dans ArgoCD
+  name: social-media-scrapper # Nom unique de l'application dans ArgoCD
   namespace: argocd # Doit s'exécuter dans le namespace ArgoCD
   finalizers:
   - resources-finalizer.argocd.argoproj.io

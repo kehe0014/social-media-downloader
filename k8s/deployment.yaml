@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: social-media-scrapper-deployment
+  name: social-media-scrapper
   namespace: my-app
 spec:
   replicas: 2
@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: social-media-scrapper
-          image: docker.io/tdksoft341/social-media-dashboard:ad375c39361f6334ed82d4e48e23c7e49978bee2
+          image: docker.io/tdksoft341/social-media-dashboard:latest
           ports:
             - containerPort: 8501
           envFrom:
