@@ -39,8 +39,8 @@
 1. **Clone the repository**
 
 ```bash
-git clone https://github.com/your-username/socialmedia_downloader.git
-cd socialmedia_downloader
+git clone https://github.com/your-username/socialmedia_scrapper.git
+cd socialmedia_scrapper
 
 2. **Install dependencies**
 
