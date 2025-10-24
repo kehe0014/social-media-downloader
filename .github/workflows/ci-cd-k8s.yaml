@@ -56,7 +56,7 @@ jobs:
           host: ${{ env.K3S_HOST }}
           username: ${{ env.K3S_USERNAME }}
           key: ${{ secrets.SSH_VPS_DE }}
-          source: "k8s/deployment.yaml"
+          source: "./k8s/deployment.yaml"
           target: "/home/${{ env.K3S_USERNAME }}/"
 
       - name: Deploy on remote K3S cluster
