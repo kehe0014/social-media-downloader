@@ -57,7 +57,7 @@ jobs:
           echo "Current directory contents:"
           ls -F
           echo "Contents of k8s/ directory:"
-          ls -l k8s/
+          ls -la k8s/
           if [ ! -f k8s/deployment.yaml ]; then
             echo "❌ ERROR: k8s/deployment.yaml NOT FOUND LOCALLY. Check your branch/repository contents."
             exit 1
@@ -80,71 +80,15 @@ jobs:
           kubeconfig: ${{ secrets.KUBECONFIG_K3S }}
 
 
-      - name: Deploy to K3s Cluster
-        uses: azure/k8s-deploy@v4
-        with:
-          action: deploy
+      #- name: Deploy to K3s Cluster
+        #uses: azure/k8s-deploy@v4
+        #with:
+          #action: deploy
           # Path to Kubernetes manifest files
-          manifests: |
-            ${{ env.K8S_MANIFESTS_PATH }}deployment.yaml
-            ${{ env.K8S_MANIFESTS_PATH }}service.yaml
+          #manifests: |
+           # ${{ env.K8S_MANIFESTS_PATH }}deployment.yaml
+           # ${{ env.K8S_MANIFESTS_PATH }}service.yaml
           
           # Replace image in manifest with the newly built image tag
-          images: |
-            ${{ env.IMAGE_NAME }}:${{ github.sha }}
-      
-      - name: Verify Deployment Rollout Status
-        run: |
-          echo "Verifying deployment in namespace ${{ env.K8S_NAMESPACE }}..."
-          kubectl rollout status deployment/social-media-scrapper-deployment -n ${{ env.K8S_NAMESPACE }} --timeout=120s
-
-  health-check:
-    name: Cluster Health & Debug Info
-    runs-on: ubuntu-latest
-    needs: deploy
-
-    steps:
-      - name: Check cluster health via SSH
-        uses: appleboy/ssh-action@v1.1.0
-        with:
-          host: ${{ env.K3S_HOST }}
-          username: ${{ env.K3S_USERNAME }}
-          key: ${{ secrets.SSH_VPS_DE }}
-          script: |
-            echo "🩺 Pods:"
-            kubectl get pods -n ${{ env.K8S_NAMESPACE }} -o wide
-            echo "🌐 Services:"
-            kubectl get svc -n ${{ env.K8S_NAMESPACE }}
-            echo "🔀 Ingress:"
-            kubectl get ingress -n ${{ env.K8S_NAMESPACE }}
-            echo "🧩 Deployment details:"
-            kubectl describe deployment social-media-scrapper-deployment -n ${{ env.K8S_NAMESPACE }}
-
-  smoke-test:
-    name: Basic HTTP Smoke Test
-    runs-on: ubuntu-latest
-    needs: health-check
-
-    steps:
-      - name: Wait for app to be ready
-        run: |
-          echo "⏳ Waiting for app to be reachable..."
-          for i in {1..15}; do
-            if curl -s --head --fail ${{ env.APP_DOMAIN }} >/dev/null; then
-              echo "✅ App is reachable!"
-              exit 0
-            fi
-            echo "App not ready yet... retrying in 10s"
-            sleep 10
-          done
-          echo "❌ App not reachable after 150s" && exit 1
-
-      - name: Check HTTP 200 on root
-        run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" ${{ env.APP_DOMAIN }})
-          if [ "$STATUS" -eq 200 ]; then
-            echo "✅ Application responded with HTTP 200"
-          else
-            echo "❌ Application returned HTTP $STATUS"
-            exit 1
-          fi
+          #images: |
+           # ${{ env.IMAGE_NAME }}:${{ github.sha }}
