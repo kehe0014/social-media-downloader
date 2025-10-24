@@ -16,6 +16,7 @@ env:
   K3S_HOST: 178.254.23.139
   K3S_USERNAME: hkengne
   APP_DOMAIN: http://178.254.23.139
+  K8S_MANIFESTS_PATH: k8s/
 
 jobs:
   build-and-push:
@@ -63,44 +64,39 @@ jobs:
           fi
           echo "✅ k8s/deployment.yaml confirmed to exist locally."
           
-      - name: Copy deployment file to server
-        uses: appleboy/scp-action@v0.1.7
+      #- name: Copy deployment file to server
+        #uses: appleboy/scp-action@v0.1.7
+       # with:
+         # host: ${{ env.K3S_HOST }}
+          #username: ${{ env.K3S_USERNAME }}
+          #key: ${{ secrets.SSH_VPS_DE }}
+          #source: "k8s/deployment.yaml"
+          #target: "/home/${{ env.K3S_USERNAME }}/"
+
+      - name: Set Kubernetes context (Connect to K3s)
+        uses: azure/k8s-set-context@v4
         with:
-          host: ${{ env.K3S_HOST }}
-          username: ${{ env.K3S_USERNAME }}
-          key: ${{ secrets.SSH_VPS_DE }}
-          source: "k8s/deployment.yaml"
-          target: "/home/${{ env.K3S_USERNAME }}/"
+          method: kubeconfig
+          kubeconfig: ${{ secrets.KUBECONFIG_K3S }}
 
-      - name: Deploy on remote K3S cluster
-        uses: appleboy/ssh-action@v1.1.0
+
+      - name: Deploy to K3s Cluster
+        uses: azure/k8s-deploy@v4
         with:
-          host: ${{ env.K3S_HOST }}
-          username: ${{ env.K3S_USERNAME }}
-          key: ${{ secrets.SSH_VPS_DE }}
-          script: |
-            set -e
-            
-            # 🔬 DEBUG STEP 2: VERIFY REMOTE WRITE AND FILE PRESENCE
-            echo "Testing write permission and confirming file existence on K3S host..."
-            # Test write permission by creating a temporary file
-            touch /home/${{ env.K3S_USERNAME }}/.write_test
-            rm /home/${{ env.K3S_USERNAME }}/.write_test
-            echo "✅ Write permission successful."
-
-            # List the copied file (this is the key check for the scp failure)
-            ls -l /home/${{ env.K3S_USERNAME }}/deployment.yaml || { echo "❌ ERROR: deployment.yaml not found on remote server after copy." && exit 1; }
-
-            echo "🔄 Updating image tag in deployment.yaml"
-            sed -i "s|tdksoft341/social-media-dashboard:latest|tdksoft341/social-media-dashboard:${{ env.IMAGE_TAG }}|g" /home/${{ env.K3S_USERNAME }}/deployment.yaml
-
-            echo "🚀 Applying deployment..."
-            kubectl apply -n ${{ env.K8S_NAMESPACE }} -f /home/${{ env.K3S_USERNAME }}/deployment.yaml
-
-            echo "🔎 Checking rollout status..."
-            kubectl rollout status deployment/social-media-scrapper-deployment -n ${{ env.K8S_NAMESPACE }}
-
-            echo "✅ Deployment successful."
+          action: deploy
+          # Path to Kubernetes manifest files
+          manifests: |
+            ${{ env.K8S_MANIFESTS_PATH }}deployment.yaml
+            ${{ env.K8S_MANIFESTS_PATH }}service.yaml
+          
+          # Replace image in manifest with the newly built image tag
+          images: |
+            ${{ env.IMAGE_NAME }}:${{ github.sha }}
+      
+      - name: Verify Deployment Rollout Status
+        run: |
+          echo "Verifying deployment in namespace ${{ env.K8S_NAMESPACE }}..."
+          kubectl rollout status deployment/social-media-scrapper-deployment -n ${{ env.K8S_NAMESPACE }} --timeout=120s
 
   health-check:
     name: Cluster Health & Debug Info
