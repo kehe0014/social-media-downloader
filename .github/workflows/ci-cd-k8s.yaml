@@ -50,13 +50,26 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      # 🔍 DEBUG STEP 1: VERIFY LOCAL FILE BEFORE COPY
+      - name: Verify Local File Structure
+        run: |
+          echo "Current directory contents:"
+          ls -F
+          echo "Contents of k8s/ directory:"
+          ls -l k8s/
+          if [ ! -f k8s/deployment.yaml ]; then
+            echo "❌ ERROR: k8s/deployment.yaml NOT FOUND LOCALLY. Check your branch/repository contents."
+            exit 1
+          fi
+          echo "✅ k8s/deployment.yaml confirmed to exist locally."
+          
       - name: Copy deployment file to server
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ env.K3S_HOST }}
           username: ${{ env.K3S_USERNAME }}
           key: ${{ secrets.SSH_VPS_DE }}
-          source: "./k8s/deployment.yaml"
+          source: "k8s/deployment.yaml"
           target: "/home/${{ env.K3S_USERNAME }}/"
 
       - name: Deploy on remote K3S cluster
@@ -67,6 +80,17 @@ jobs:
           key: ${{ secrets.SSH_VPS_DE }}
           script: |
             set -e
+            
+            # 🔬 DEBUG STEP 2: VERIFY REMOTE WRITE AND FILE PRESENCE
+            echo "Testing write permission and confirming file existence on K3S host..."
+            # Test write permission by creating a temporary file
+            touch /home/${{ env.K3S_USERNAME }}/.write_test
+            rm /home/${{ env.K3S_USERNAME }}/.write_test
+            echo "✅ Write permission successful."
+
+            # List the copied file (this is the key check for the scp failure)
+            ls -l /home/${{ env.K3S_USERNAME }}/deployment.yaml || { echo "❌ ERROR: deployment.yaml not found on remote server after copy." && exit 1; }
+
             echo "🔄 Updating image tag in deployment.yaml"
             sed -i "s|tdksoft341/social-media-dashboard:latest|tdksoft341/social-media-dashboard:${{ env.IMAGE_TAG }}|g" /home/${{ env.K3S_USERNAME }}/deployment.yaml
 
