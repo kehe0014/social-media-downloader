@@ -4,24 +4,36 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch:
+    # Exclusion : n'exécute pas le CI sur les commits automatiques faits par cette même action
+    # Note: les commits automatiques faits par cette même action ne déclenchent pas de nouvelles exécutions du workflow.
+    paths-ignore:
+      - 'k8s/deployment.yaml' 
 
 env:
   PYTHON_VERSION: '3.10'
+  # Docker Hub Credentials and Image Info
   DOCKER_USERNAME: tdksoft341
   REGISTRY: docker.io
   IMAGE_NAME: social-media-dashboard
   IMAGE_TAG: ${{ github.sha }}
+  FULL_IMAGE_NAME: ${{ env.REGISTRY }}/${{ env.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}
+
+  # K3S and App Deployment Info
   K8S_NAMESPACE: my-app
   K3S_HOST: 178.254.23.139
   K3S_USERNAME: hkengne
   APP_DOMAIN: http://178.254.23.139
+
+  # k8s manifests path
   K8S_MANIFESTS_PATH: k8s/
 
 jobs:
   build-and-push:
     name: Build & Push Docker Image
     runs-on: ubuntu-latest
+    permissions:
+      # Give the default GITHUB_TOKEN write permission to commit and push the changed files back to the repository.
+      contents: write
     
     steps:
       - name: Checkout Repository
@@ -39,8 +51,8 @@ jobs:
           context: .
           push: true
           tags: |
-            ${{ env.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
-            ${{ env.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:latest
+            ${{ env.FULL_IMAGE_NAME }}:${{ github.sha }}
+
 
   deploy:
     name: Deploy on K3S via SSH
@@ -50,45 +62,21 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-
-      # 🔍 DEBUG STEP 1: VERIFY LOCAL FILE BEFORE COPY
-      - name: Verify Local File Structure
-        run: |
-          echo "Current directory contents:"
-          ls -F
-          echo "Contents of k8s/ directory:"
-          ls -la k8s/
-          if [ ! -f k8s/deployment.yaml ]; then
-            echo "❌ ERROR: k8s/deployment.yaml NOT FOUND LOCALLY. Check your branch/repository contents."
-            exit 1
-          fi
-          echo "✅ k8s/deployment.yaml confirmed to exist locally."
           
-      #- name: Copy deployment file to server
-        #uses: appleboy/scp-action@v0.1.7
-       # with:
-         # host: ${{ env.K3S_HOST }}
-          #username: ${{ env.K3S_USERNAME }}
-          #key: ${{ secrets.SSH_VPS_DE }}
-          #source: "k8s/deployment.yaml"
-          #target: "/home/${{ env.K3S_USERNAME }}/"
-
-      - name: Set Kubernetes context (Connect to K3s)
-        uses: azure/k8s-set-context@v4
+      # 3. MISE À JOUR DU MANIFESTE (L'étape cruciale pour GitOps)
+      - name: Update Deployment Manifest with New Image Tag
+        uses: mikefarah/yq@v4 
         with:
-          method: kubeconfig
-          kubeconfig: ${{ secrets.KUBECONFIG_K3S }}
+          cmd: |
+            # Mise à jour de l'image du conteneur 'social-media-scrapper'
+            # Le chemin: spec -> template -> spec -> containers (le premier élément [0]) -> image
+            NEW_TAG="${{ env.FULL_IMAGE_NAME }}:${{ github.sha }}"
+            
+            yq -i '.spec.template.spec.containers[0].image = env(NEW_TAG)' ${{ env.K8S_MANIFESTS_PATH }}deployment.yaml
 
-
-      #- name: Deploy to K3s Cluster
-        #uses: azure/k8s-deploy@v4
-        #with:
-          #action: deploy
-          # Path to Kubernetes manifest files
-          #manifests: |
-           # ${{ env.K8S_MANIFESTS_PATH }}deployment.yaml
-           # ${{ env.K8S_MANIFESTS_PATH }}service.yaml
-          
-          # Replace image in manifest with the newly built image tag
-          #images: |
-           # ${{ env.IMAGE_NAME }}:${{ github.sha }}
+      # 4. COMMIT ET PUSH LE CHANGEMENT
+      - name: Commit and Push Image Tag Change
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "CD: Update image tag for social-media-scrapper to ${{ github.sha }}"
+          file_pattern: ${{ env.K8S_MANIFESTS_PATH }}deployment.yaml
