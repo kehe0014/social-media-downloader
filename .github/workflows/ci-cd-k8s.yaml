@@ -12,18 +12,16 @@ env:
   REGISTRY: docker.io
   IMAGE_NAME: social-media-dashboard
   IMAGE_TAG: ${{ github.sha }}
-  K8S_NAMESPACE: my-app  # Match your existing namespace
+  K8S_NAMESPACE: my-app
   K3S_HOST: 178.254.23.139
   K3S_USERNAME: hkengne
+  APP_DOMAIN: http://178.254.23.139  # ou ton domaine Ingress si tu en as un
 
 jobs:
   build-test-and-publish:
     name: Build, Test & Push to Docker Hub
     runs-on: ubuntu-latest
     
-    permissions:
-      contents: read
-      
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -49,61 +47,87 @@ jobs:
             ${{ env.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:latest
           cache-from: type=gha
 
-  deploy-k8s:
-    name: Deploy to K3S Production
-    needs: build-test-and-publish
+  deploy:
+    name: Deploy to K3S Cluster
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    needs: build-test-and-publish
 
     steps:
-      - name: Deploy to K3S Cluster
-        uses: appleboy/ssh-action@v1.0.3
-        env:
-          K8S_NAMESPACE: ${{ env.K8S_NAMESPACE }}
-          IMAGE_NAME: ${{ env.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
-        with:
-          host: ${{ env.K3S_HOST }}
-          username: ${{ env.K3S_USERNAME }}
-          key: ${{ secrets.SSH_VPS_DE }}
-          envs: K8S_NAMESPACE,IMAGE_NAME
-          script: |
-            echo "--- Starting K3S Deployment to Namespace: ${K8S_NAMESPACE} ---"
-            echo "Using image: ${IMAGE_NAME}"
-            
-            # Verify namespace exists
-            if ! kubectl get namespace "${K8S_NAMESPACE}" &> /dev/null; then
-              echo "Namespace ${K8S_NAMESPACE} does not exist. Creating it..."
-              kubectl create namespace "${K8S_NAMESPACE}"
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG_K3S }}" > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Verify kubectl connection
+        run: kubectl get nodes -o wide
+
+      - name: Update image in deployment file
+        run: |
+          sed -i "s|tdksoft341/social-media-dashboard:latest|tdksoft341/social-media-dashboard:${{ env.IMAGE_TAG }}|g" deployment.yaml
+
+      - name: Apply Kubernetes Manifests
+        run: |
+          kubectl apply -n ${{ env.K8S_NAMESPACE }} -f deployment.yaml
+          kubectl rollout status deployment/social-media-scrapper-deployment -n ${{ env.K8S_NAMESPACE }}
+
+  health-check:
+    name: Check Cluster and App Health
+    runs-on: ubuntu-latest
+    needs: deploy
+
+    steps:
+      - name: Set up Kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG_K3S }}" > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Check Pods status
+        run: kubectl get pods -n ${{ env.K8S_NAMESPACE }} -o wide
+
+      - name: Check Services
+        run: kubectl get svc -n ${{ env.K8S_NAMESPACE }}
+
+      - name: Check Ingress
+        run: kubectl get ingress -n ${{ env.K8S_NAMESPACE }}
+
+      - name: Describe Deployment (debug info)
+        run: kubectl describe deployment social-media-scrapper-deployment -n ${{ env.K8S_NAMESPACE }}
+
+      - name: Get recent logs (last 50 lines)
+        run: |
+          POD_NAME=$(kubectl get pods -n ${{ env.K8S_NAMESPACE }} -l app=social-media-scrapper -o jsonpath='{.items[0].metadata.name}')
+          kubectl logs $POD_NAME -n ${{ env.K8S_NAMESPACE }} --tail=50
+
+  smoke-tests:
+    name: Run Basic HTTP Tests via Ingress
+    runs-on: ubuntu-latest
+    needs: health-check
+
+    steps:
+      - name: Wait for app to be ready
+        run: |
+          echo "Waiting for the app to be accessible..."
+          for i in {1..15}; do
+            if curl -s --head --fail ${{ env.APP_DOMAIN }} >/dev/null; then
+              echo "✅ App is reachable!"
+              exit 0
             fi
-            
-            # Verify deployment exists
-            echo "Checking for existing deployment..."
-            if kubectl get deployment social-media-scrapper-deployment -n "${K8S_NAMESPACE}" &> /dev/null; then
-              echo "✅ Deployment found. Updating image..."
-              kubectl set image deployment/social-media-scrapper-deployment \
-                social-media-scrapper="${IMAGE_NAME}" -n "${K8S_NAMESPACE}"
-            else
-              echo "❌ Deployment not found in namespace ${K8S_NAMESPACE}"
-              echo "Please ensure your deployment manifest is applied to the correct namespace"
-              exit 1
-            fi
-            
-            echo "Deployment update triggered. Checking rollout status..."
-            kubectl rollout status deployment/social-media-scrapper-deployment -n "${K8S_NAMESPACE}" --timeout=5m
-            
-            if [ $? -eq 0 ]; then
-                echo "✅ Deployment completed successfully!"
-                echo "--- Current deployment status ---"
-                kubectl get deployment social-media-scrapper-deployment -n "${K8S_NAMESPACE}"
-                echo "--- Pods ---"
-                kubectl get pods -n "${K8S_NAMESPACE}" -l app=social-media-scrapper
-                echo "--- Container images ---"
-                kubectl get pods -n "${K8S_NAMESPACE}" -l app=social-media-scrapper -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.spec.containers[*].image}{"\n"}{end}'
-            else
-                echo "❌ Deployment failed!"
-                echo "--- Deployment description ---"
-                kubectl describe deployment social-media-scrapper-deployment -n "${K8S_NAMESPACE}"
-                echo "--- Recent events ---"
-                kubectl get events -n "${K8S_NAMESPACE}" --sort-by='.lastTimestamp' | tail -10
-                exit 1
-            fi
+            echo "App not ready yet... retrying in 10s"
+            sleep 10
+          done
+          echo "❌ App is not reachable after 150s" && exit 1
+
+      - name: Test app main route
+        run: |
+          echo "Testing main page..."
+          curl -s -o /dev/null -w "%{http_code}" ${{ env.APP_DOMAIN }} | grep 200
+
+      - name: Test health or API endpoint (if exists)
+        run: |
+          # Exemple : /health ou /status si tu as un endpoint
+          curl -s -o /dev/null -w "%{http_code}" ${{ env.APP_DOMAIN }}/health || echo "⚠️ No /health endpoint found"
