@@ -14,10 +14,10 @@ spec:
         app: social-media-scrapper
     spec:
       containers:
-      - name: social-media-scrapper
-        image: tdksoft341/social-media-dashboard:latest
-        ports:
-        - containerPort: 8501
-        envFrom:
-        - configMapRef:
-            name: social-media-scrapper-config
+        - name: social-media-scrapper
+          image: docker.io/tdksoft341/social-media-dashboard:f24866a24658292e814731082b874e17413b77a4
+          ports:
+            - containerPort: 8501
+          envFrom:
+            - configMapRef:
+                name: social-media-scrapper-config
