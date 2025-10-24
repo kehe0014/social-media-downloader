@@ -8,7 +8,7 @@ metadata:
 spec:
   project: default # Le projet ArgoCD par défaut
   source:
-    repoURL: https://github.com/hkengne/social-media-downloader.git # URL de votre dépôt Git
+    repoURL: https://github.com/kehe0014/social-media-downloader.git # URL de votre dépôt Git
     targetRevision: main # La branche à surveiller
     path: k8s # Le sous-dossier où ArgoCD trouvera les manifestes (deployment.yaml, service.yaml, etc.)
   destination:
