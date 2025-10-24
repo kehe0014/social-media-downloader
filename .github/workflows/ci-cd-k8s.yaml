@@ -73,3 +73,6 @@ jobs:
           commit_message: "CD: Update image tag for social-media-scrapper to ${{ github.sha }}"
           file_pattern: ${{ env.K8S_MANIFESTS_PATH }}deployment.yaml
           token: ${{ secrets.GH_PAT }}
+          # 💡 ADD THIS LINE TO PULL CHANGES BEFORE PUSHING 💡
+          # This tells the action to pull and merge/rebase any upstream changes first.
+          git_pull_options: --rebase
