@@ -4,7 +4,7 @@ metadata:
   name: social-media-scrapper
   namespace: my-app
 spec:
-  replicas: 1
+  replicas: 4
   selector:
     matchLabels:
       app: social-media-scrapper
