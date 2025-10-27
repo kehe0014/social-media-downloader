@@ -70,6 +70,9 @@ WORKDIR /app
 # Copy application code with proper ownership
 COPY --chown=appuser:appuser app/ .
 
+# Ensure correct permissions
+RUN chown -R appuser:appuser /app
+
 # Change to non-root user
 USER appuser
 
