@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: social-media-scrapper
-          image: docker.io/tdksoft341/social-media-dashboard:923279c1d48b7b1b746803f258fc977148892b66
+          image: docker.io/tdksoft341/social-media-dashboard:259ffbbee298a8febe56aa3b5531cafb2ba01d19
           ports:
             - containerPort: 8501
           envFrom:
