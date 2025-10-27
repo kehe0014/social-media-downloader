@@ -7,10 +7,10 @@ metadata:
     kubernetes.io/ingress.class: "nginx"
 spec:
   rules:
-  - host: 178.254.23.139.nip.io
+  - host: social-media.178.254.23.139.nip.io
     http:
       paths:
-      - path: /sm-scrapper
+      - path: /
         pathType: Prefix
         backend:
           service:
