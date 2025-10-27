@@ -18,6 +18,10 @@ spec:
           image: docker.io/tdksoft341/social-media-dashboard:20dace2862423280ae4d1d45ea564e1c1d203f30
           ports:
             - containerPort: 8501
+          env:
+            # 🔧 Correction principale : indique à Streamlit de servir sur /sm-scrapper
+            - name: STREAMLIT_SERVER_BASEURLPATH
+              value: /sm-scrapper
           envFrom:
             - configMapRef:
                 name: social-media-scrapper-config
