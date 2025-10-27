@@ -4,7 +4,6 @@ metadata:
   name: social-media-scrapper-ingress
   annotations:
     spec.ingressClassName: "nginx"
-    nginx.ingress.kubernetes.io/rewrite-target: /
 spec:
   rules:
   - host: social-media.178.254.23.139.nip.io
