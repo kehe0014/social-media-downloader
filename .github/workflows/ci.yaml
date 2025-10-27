@@ -85,6 +85,7 @@ jobs:
           token: ${{ secrets.GH_PAT }}
           git_pull_options: --rebase
 
+
       - name: Apply Kubernetes Manifests
         uses: azure/k8s-deploy@v5
         with:
