@@ -2,14 +2,16 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: social-media-scrapper-ingress
+  namespace: my-app
   annotations:
-    spec.ingressClassName: "nginx"
+    nginx.ingress.kubernetes.io/rewrite-target: /
 spec:
+  ingressClassName: nginx
   rules:
   - host: social-media.178.254.23.139.nip.io
     http:
       paths:
-      - path: /
+      - path: /sm-scrapper
         pathType: Prefix
         backend:
           service:
