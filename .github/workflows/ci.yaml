@@ -1,11 +1,10 @@
-name: CI/CD Pipeline to K3S via argocd GitOps
+name: CI/CD Pipeline to K3S via ArgoCD GitOps
 
 on:
   push:
     branches:
       - main
     paths-ignore:
-      # Ignorer les modifications dans les fichiers non pertinents
       - 'k8s/deployment.yaml'
 
 env:
@@ -19,7 +18,6 @@ env:
   K3S_USERNAME: hkengne
   APP_DOMAIN: http://178.254.23.139
   K8S_MANIFESTS_PATH: k8s/
-  # Ajout du token GitHub
   GH_PAT: ${{ secrets.GH_PAT }}
 
 jobs:
@@ -44,11 +42,10 @@ jobs:
         with:
           context: .
           push: true
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          tags: ${{ env.REGISTRY }}/${{ env.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
 
   deploy:
-    name: Deploy on K3S implemented GItOps with ArgoCD
+    name: Deploy on K3S via ArgoCD
     runs-on: ubuntu-latest
     needs: build-and-push
     permissions:
@@ -65,14 +62,35 @@ jobs:
         with:
           cmd: |
             export NEW_TAG="${{ env.REGISTRY }}/${{ env.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
-            yq -i '.spec.template.spec.containers[0].image = env(NEW_TAG)' ${{ env.K8S_MANIFESTS_PATH }}deployment.yaml
+            yq -i '.spec.template.spec.containers[0].image = env(NEW_TAG)' ${{ env.K8S_MANIFESTS_PATH }}/deployment.yaml
 
-      - name: Commit and Push Image Tag Change
+      - name: Ensure Service is ClusterIP
+        run: |
+          yq -i '.spec.type = "ClusterIP"' ${{ env.K8S_MANIFESTS_PATH }}/service.yaml
+
+      - name: Ensure Ingress has correct path
+        run: |
+          yq -i '.spec.rules[0].http.paths[0].path = "/sm-scrapper"' ${{ env.K8S_MANIFESTS_PATH }}/ingress.yaml
+          yq -i '.spec.rules[0].http.paths[0].backend.service.name = "social-media-scrapper-service"' ${{ env.K8S_MANIFESTS_PATH }}/ingress.yaml
+          yq -i '.spec.rules[0].http.paths[0].backend.service.port.number = 80' ${{ env.K8S_MANIFESTS_PATH }}/ingress.yaml
+
+      - name: Commit and Push Manifest Changes
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "CD: Update image tag for social-media-scrapper to ${{ github.sha }}"
-          file_pattern: ${{ env.K8S_MANIFESTS_PATH }}deployment.yaml
+          commit_message: "CD: Update image tag and ingress path for social-media-scrapper to ${{ github.sha }}"
+          file_pattern: |
+            ${{ env.K8S_MANIFESTS_PATH }}/deployment.yaml
+            ${{ env.K8S_MANIFESTS_PATH }}/service.yaml
+            ${{ env.K8S_MANIFESTS_PATH }}/ingress.yaml
           token: ${{ secrets.GH_PAT }}
-          # 💡 ADD THIS LINE TO PULL CHANGES BEFORE PUSHING 💡
-          # This tells the action to pull and merge/rebase any upstream changes first.
           git_pull_options: --rebase
+
+      - name: Apply Kubernetes Manifests
+        uses: azure/k8s-deploy@v5
+        with:
+          namespace: ${{ env.K8S_NAMESPACE }}
+          manifests: |
+            ${{ env.K8S_MANIFESTS_PATH }}/deployment.yaml
+            ${{ env.K8S_MANIFESTS_PATH }}/service.yaml
+            ${{ env.K8S_MANIFESTS_PATH }}/ingress.yaml
+          kubeconfig: ${{ secrets.KUBECONFIG }}
