@@ -30,7 +30,7 @@ if not DOWNLOADER_AVAILABLE:
 url = st.text_input("🔗 URL de la vidéo Facebook / YouTube / TikTok / Instagram")
 
 # Cookies upload (pour Facebook privé)
-cookies_file = st.file_uploader("📁 Fichier cookies.txt (pour vidéos privées Facebook)", type="txt")
+# cookies_file = st.file_uploader("📁 Fichier cookies.txt (pour vidéos privées Facebook)", type="txt")
 
 def download_video(url, cookies_path=None):
     """Télécharge la vidéo avec yt-dlp et retourne le chemin du fichier."""
