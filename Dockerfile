@@ -75,6 +75,10 @@ COPY --chown=appuser:appuser app/ .
 # Ensure correct ownership
 RUN chown -R appuser:appuser /app
 
+## Cookies for facebook to be able to dowload private videos
+COPY downloader/cookies/facebook_cookies.txt /app/downloader/cookies/facebook_cookies.txt
+RUN chown appuser:appuser /app/downloader/cookies/facebook_cookies.txt
+
 # Switch to non-root user
 USER appuser
 
