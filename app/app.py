@@ -19,8 +19,8 @@ except ImportError:
     DOWNLOADER_AVAILABLE = False
 
 # Page setup
-st.set_page_config(page_title="Social Media Downloader 🎬", layout="centered")
-st.title("🎬 Social Media Downloader Scrapper Tool")
+st.set_page_config(page_title="Multi Media Scapper 🎬", layout="centered")
+st.title("🎬 TDK Social Media Scrapper Tool")
 
 
 if not DOWNLOADER_AVAILABLE:
