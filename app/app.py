@@ -20,20 +20,19 @@ except ImportError:
 
 # Page setup
 st.set_page_config(page_title="Social Media Downloader 🎬", layout="centered")
-st.title("🎬 Social Media Downloader Pro")
+st.title("🎬 Social Media Downloader Scrapper Tool")
+
 
 if not DOWNLOADER_AVAILABLE:
-    st.error("❌ yt-dlp n'est pas installé. Faites `pip install yt-dlp`.")
+    st.error("❌ yt-dlp is not installed. Please run `pip install yt-dlp`.")
     st.stop()
 
 # URL input
-url = st.text_input("🔗 URL de la vidéo Facebook / YouTube / TikTok / Instagram")
+url = st.text_input("🔗 Video URL (Facebook / YouTube / TikTok / Instagram/ Baidu ...)")
 
-# Cookies upload (pour Facebook privé)
-# cookies_file = st.file_uploader("📁 Fichier cookies.txt (pour vidéos privées Facebook)", type="txt")
 
 def download_video(url, cookies_path=None):
-    """Télécharge la vidéo avec yt-dlp et retourne le chemin du fichier."""
+    """Download video with yt-dlp and return the file path."""
     temp_dir = tempfile.mkdtemp()
     ydl_opts = {
         'outtmpl': os.path.join(temp_dir, '%(title)s.%(ext)s'),
@@ -48,20 +47,20 @@ def download_video(url, cookies_path=None):
             file_path = ydl.prepare_filename(info)
         return file_path
     except yt_dlp.utils.DownloadError as e:
-        raise RuntimeError(f"Erreur téléchargement: {e}")
+        raise RuntimeError(f"Download error: {e}")
 
 def create_download_link(file_path):
-    """Crée un lien de téléchargement Streamlit pour le fichier."""
+    """Create a Streamlit download link for the file."""
     with open(file_path, "rb") as f:
         data = f.read()
     b64 = base64.b64encode(data).decode()
     fname = os.path.basename(file_path)
-    href = f'<a href="data:application/octet-stream;base64,{b64}" download="{fname}">📥 Télécharger {fname}</a>'
+    href = f'<a href="data:application/octet-stream;base64,{b64}" download="{fname}">📥 Download {fname}</a>'
     st.markdown(href, unsafe_allow_html=True)
 
-if st.button("🚀 Télécharger"):
+if st.button("🚀 Download"):
     if not url.strip():
-        st.error("Veuillez saisir une URL valide.")
+        st.error("Please enter a valid URL.")
     else:
         try:
             cookies_path = None
@@ -71,10 +70,10 @@ if st.button("🚀 Télécharger"):
                 temp_cookies.close()
                 cookies_path = temp_cookies.name
 
-            with st.spinner("Téléchargement en cours..."):
+            with st.spinner("Download in progress..."):
                 file_path = download_video(url, cookies_path)
-            st.success("✅ Téléchargement terminé !")
+            st.success("✅ Download completed!")
             create_download_link(file_path)
 
         except Exception as e:
-            st.error(f"❌ Impossible de récupérer la vidéo : {e}")
+            st.error(f"❌ Unable to retrieve the video: {e}")
